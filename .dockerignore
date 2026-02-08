@@ -1,0 +1,45 @@
+# Git files
+.git
+.gitignore
+
+# Documentation
+README.md
+*.md
+
+# Development files
+.env
+.env.example
+*.local
+
+# Build artifacts
+bin/
+build/
+dist/
+
+# Data and logs
+data/
+*.log
+*.db
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Test files
+*_test.go
+testdata/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Docker files (no need to include in image)
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Go build cache
+go.sum.backup
