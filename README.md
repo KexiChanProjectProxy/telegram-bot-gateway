@@ -28,6 +28,9 @@ The Telegram Bot Gateway is a unified interface between Telegram bots and downst
 ### 🔐 Security & Authentication
 - ✅ JWT authentication (access + refresh tokens)
 - ✅ API key authentication (Argon2id hashing)
+- ✅ **CLI-only API key management** (enhanced security)
+- ✅ **Granular bot permissions** (restrict keys to specific bots)
+- ✅ **Granular feedback control** (restrict message sources)
 - ✅ Telegram Bot API-style auth (query params & POST body)
 - ✅ Bcrypt password hashing
 - ✅ AES-256-GCM bot token encryption
@@ -56,6 +59,37 @@ The Telegram Bot Gateway is a unified interface between Telegram bots and downst
 - ✅ Connection pooling (MySQL + Redis)
 - ✅ Graceful shutdown
 - ✅ Health checks and metrics
+
+---
+
+## ⚡ Latest Updates
+
+### 🔒 CLI-Based API Key Management (New!)
+
+For enhanced security, API key management has been moved to a dedicated CLI tool:
+
+```bash
+# Build CLI tool
+go build -o bin/apikey cmd/apikey/main.go
+
+# Create API key with granular permissions
+./bin/apikey create --name "Production" --rate-limit 5000 --expires 1y
+./bin/apikey grant-chat 1 5 --read --send
+./bin/apikey grant-bot 1 2              # Restrict to bot ID 2 only
+./bin/apikey grant-feedback 1 5         # Only receive from chat 5
+./bin/apikey show-permissions 1
+```
+
+**Why CLI-only?**
+- ✅ Reduced attack surface (no network exposure)
+- ✅ Requires server access (privilege separation)
+- ✅ Granular bot and feedback permissions
+- ✅ Better audit trail
+
+📚 **Documentation:**
+- [CLI Tool Guide](cmd/apikey/README.md)
+- [Migration Guide](MIGRATION_APIKEY.md)
+- [Implementation Details](IMPLEMENTATION_SUMMARY.md)
 
 ---
 
@@ -99,8 +133,14 @@ docker-compose up -d mysql redis
 # 4. Run migrations
 make migrate
 
-# 5. Start gateway
+# 5. Build all binaries
+make build                              # Gateway + CLI tool
+
+# 6. Start gateway
 make run
+
+# 7. Create your first API key
+./bin/apikey create --name "Dev Key"
 ```
 
 ---
@@ -110,6 +150,11 @@ make run
 ### Getting Started
 - **[Getting Started Guide](GETTING_STARTED.md)** - Setup and configuration
 - **[Deployment Guide](docs/DEPLOYMENT.md)** - Production deployment (Docker, K8s)
+
+### API Key Management (New!)
+- **[CLI Tool Guide](cmd/apikey/README.md)** - Complete CLI documentation
+- **[Migration Guide](MIGRATION_APIKEY.md)** - Upgrade from REST API
+- **[Implementation Summary](IMPLEMENTATION_SUMMARY.md)** - Technical details
 
 ### API Documentation
 - **[Complete API Reference](docs/API_COMPLETE.md)** - All 36+ endpoints with examples
@@ -169,17 +214,14 @@ curl -X POST http://localhost:8080/api/v1/auth/login \
 
 # Response: { "access_token": "...", "refresh_token": "..." }
 
-# 2. Create API key
-curl -X POST http://localhost:8080/api/v1/apikeys \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Production Key",
-    "scopes": ["bots:read", "messages:send"],
-    "expires_in_days": 365
-  }'
+# 2. Create API key (CLI-only for security)
+./bin/apikey create \
+  --name "Production Key" \
+  --rate-limit 5000 \
+  --expires 1y
 
-# Response: { "key": "tgw_...", ... }
+# Response: Displays full API key (save it - shown only once!)
+# API Key: tgw_...
 
 # 3. Register Telegram bot (using API key - Telegram style!)
 curl -X POST "http://localhost:8080/api/v1/bots?api_key=tgw_xxx" \
@@ -287,13 +329,15 @@ See **[API Documentation](docs/API_COMPLETE.md#examples)** for more examples.
 | **Authentication** | 3 | Partial | Login, refresh, logout |
 | **Bots** | 4 | Required | Bot management |
 | **Chats** | 4 | Required + ACL | Chat & message operations |
-| **API Keys** | 5 | Required | API key management |
+| **API Keys** | ~~5~~ **CLI-only** | **Server Access** | **Moved to CLI for security** |
 | **Webhooks** | 5 | Required | Webhook configuration |
 | **System** | 2 | Mixed | Health & metrics |
 | **Real-time** | 2 | Required | WebSocket & Telegram webhook |
 | **gRPC** | 10 methods | Required | Streaming API |
 
-**Total: 36+ endpoints across REST, WebSocket, and gRPC**
+**Total: 31 REST endpoints + 13 CLI commands + WebSocket + gRPC**
+
+> ⚠️ **Note**: API key management moved to CLI tool (`./bin/apikey`) for enhanced security
 
 See **[API Reference](docs/API_COMPLETE.md)** for complete documentation.
 
@@ -371,11 +415,15 @@ kubectl apply -f deployments/kubernetes.yaml
 ### Build from Source
 
 ```bash
-# Build binary
+# Build all binaries (gateway + CLI tool)
 make build
 
-# Run
+# Run gateway
 ./bin/gateway
+
+# Manage API keys
+./bin/apikey list
+./bin/apikey create --name "Production"
 ```
 
 See **[Deployment Guide](docs/DEPLOYMENT.md)** for complete instructions.
@@ -397,12 +445,15 @@ See **[Deployment Guide](docs/DEPLOYMENT.md)** for complete instructions.
 
 ## 🛡️ Security Features
 
+- ✅ **CLI-only API key management** (reduced attack surface)
+- ✅ **Granular bot permissions** (restrict keys to specific bots)
+- ✅ **Granular feedback control** (restrict message sources)
 - ✅ Bcrypt password hashing (cost 10)
 - ✅ AES-256-GCM bot token encryption
 - ✅ Argon2id API key hashing
 - ✅ HMAC-SHA256 webhook signatures
 - ✅ JWT with HS256 signing
-- ✅ Chat-level access control
+- ✅ Chat-level access control with Redis caching
 - ✅ Rate limiting (DDoS protection)
 - ✅ Input validation
 - ✅ SQL injection prevention (GORM)
@@ -477,12 +528,12 @@ Built with:
 
 ## 📊 Project Stats
 
-- **36 Go source files** - 10,528 lines of code
-- **13 database tables** - Complete schema with migrations
-- **36+ API endpoints** - REST + WebSocket + gRPC
-- **11 documentation files** - 4,000+ lines of docs
+- **50+ Go source files** - 13,000+ lines of code
+- **15 database tables** - Complete schema with migrations
+- **31 REST + 13 CLI commands** - Plus WebSocket + gRPC
+- **15 documentation files** - 6,500+ lines of docs
 - **3 deployment configs** - Docker Compose, Kubernetes
-- **100% task completion** - All 21 planned tasks done
+- **Complete feature set** - Production-ready gateway
 
 ---
 
