@@ -1,0 +1,193 @@
+syntax = "proto3";
+
+package gateway;
+
+option go_package = "github.com/kexi/telegram-bot-gateway/api/proto";
+
+// MessageService provides streaming access to Telegram messages
+service MessageService {
+  // StreamMessages streams messages for specified chats
+  rpc StreamMessages(StreamMessagesRequest) returns (stream MessageEvent);
+
+  // StreamChatMessages streams messages for a single chat
+  rpc StreamChatMessages(StreamChatMessagesRequest) returns (stream MessageEvent);
+
+  // SendMessage sends a message to a chat
+  rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
+
+  // GetMessages retrieves historical messages
+  rpc GetMessages(GetMessagesRequest) returns (GetMessagesResponse);
+}
+
+// StreamMessagesRequest requests message streaming
+message StreamMessagesRequest {
+  repeated uint64 chat_ids = 1;  // Chat IDs to subscribe to
+}
+
+// StreamChatMessagesRequest requests streaming for a single chat
+message StreamChatMessagesRequest {
+  uint64 chat_id = 1;
+}
+
+// MessageEvent represents a message event
+message MessageEvent {
+  string type = 1;                    // "new_message", "edited_message", "deleted_message"
+  uint64 chat_id = 2;
+  uint64 message_id = 3;
+  int64 telegram_id = 4;
+  uint64 bot_id = 5;
+  string direction = 6;               // "incoming", "outgoing"
+  string text = 7;
+  string from_username = 8;
+  string from_first_name = 9;
+  string from_last_name = 10;
+  string message_type = 11;           // "text", "photo", "video", etc.
+  int64 timestamp = 12;               // Unix timestamp in seconds
+  map<string, string> metadata = 13;  // Additional metadata
+}
+
+// SendMessageRequest sends a message
+message SendMessageRequest {
+  uint64 chat_id = 1;
+  string text = 2;
+  int64 reply_to_message_id = 3;
+}
+
+// SendMessageResponse confirms message sending
+message SendMessageResponse {
+  bool success = 1;
+  string message = 2;
+  uint64 message_id = 3;
+  int64 queued_at = 4;                // Unix timestamp in seconds
+}
+
+// GetMessagesRequest retrieves messages
+message GetMessagesRequest {
+  uint64 chat_id = 1;
+  int64 cursor = 2;                   // Unix timestamp for pagination
+  int32 limit = 3;
+}
+
+// GetMessagesResponse returns messages
+message GetMessagesResponse {
+  repeated Message messages = 1;
+  bool has_more = 2;
+  int64 next_cursor = 3;              // Unix timestamp for next page
+}
+
+// Message represents a stored message
+message Message {
+  uint64 id = 1;
+  uint64 chat_id = 2;
+  int64 telegram_id = 3;
+  int64 from_user_id = 4;
+  string from_username = 5;
+  string from_first_name = 6;
+  string from_last_name = 7;
+  string direction = 8;
+  string message_type = 9;
+  string text = 10;
+  int64 reply_to_message_id = 11;
+  int64 sent_at = 12;                 // Unix timestamp in seconds
+  int64 created_at = 13;              // Unix timestamp in seconds
+}
+
+// ChatService provides chat management
+service ChatService {
+  // ListChats lists accessible chats
+  rpc ListChats(ListChatsRequest) returns (ListChatsResponse);
+
+  // GetChat retrieves chat details
+  rpc GetChat(GetChatRequest) returns (Chat);
+}
+
+// ListChatsRequest lists chats
+message ListChatsRequest {
+  int32 offset = 1;
+  int32 limit = 2;
+}
+
+// ListChatsResponse returns chats
+message ListChatsResponse {
+  repeated Chat chats = 1;
+  int32 total = 2;
+}
+
+// GetChatRequest gets a chat
+message GetChatRequest {
+  uint64 chat_id = 1;
+}
+
+// Chat represents a Telegram chat
+message Chat {
+  uint64 id = 1;
+  uint64 bot_id = 2;
+  int64 telegram_id = 3;
+  string type = 4;
+  string title = 5;
+  string username = 6;
+  string first_name = 7;
+  string last_name = 8;
+  bool is_active = 9;
+}
+
+// BotService provides bot management
+service BotService {
+  // ListBots lists registered bots
+  rpc ListBots(ListBotsRequest) returns (ListBotsResponse);
+
+  // GetBot retrieves bot details
+  rpc GetBot(GetBotRequest) returns (Bot);
+
+  // CreateBot registers a new bot
+  rpc CreateBot(CreateBotRequest) returns (Bot);
+
+  // DeleteBot removes a bot
+  rpc DeleteBot(DeleteBotRequest) returns (DeleteBotResponse);
+}
+
+// ListBotsRequest lists bots
+message ListBotsRequest {
+  int32 offset = 1;
+  int32 limit = 2;
+}
+
+// ListBotsResponse returns bots
+message ListBotsResponse {
+  repeated Bot bots = 1;
+  int32 total = 2;
+}
+
+// GetBotRequest gets a bot
+message GetBotRequest {
+  uint64 bot_id = 1;
+}
+
+// CreateBotRequest creates a bot
+message CreateBotRequest {
+  string username = 1;
+  string token = 2;
+  string display_name = 3;
+  string description = 4;
+}
+
+// DeleteBotRequest deletes a bot
+message DeleteBotRequest {
+  uint64 bot_id = 1;
+}
+
+// DeleteBotResponse confirms deletion
+message DeleteBotResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Bot represents a Telegram bot
+message Bot {
+  uint64 id = 1;
+  string username = 2;
+  string display_name = 3;
+  string description = 4;
+  bool is_active = 5;
+  string webhook_url = 6;
+}

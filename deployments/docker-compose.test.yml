@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  mysql-test:
+    image: mysql:8.0
+    container_name: tgw-mysql-test
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: telegram_gateway_test
+    ports:
+      - "3307:3306"
+    tmpfs:
+      - /var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-ppassword"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis-test:
+    image: redis:7-alpine
+    container_name: tgw-redis-test
+    ports:
+      - "6380:6379"
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  test-runner:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    depends_on:
+      mysql-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+    environment:
+      DB_HOST: mysql-test
+      DB_PORT: 3306
+      DB_PASSWORD: password
+      REDIS_ADDRESS: redis-test:6379
+      JWT_SECRET: "test-secret-key-min-32-characters-long"
+    command: go test -v ./tests/...

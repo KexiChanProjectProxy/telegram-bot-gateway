@@ -1,0 +1,16 @@
+-- Migration: 001_initial_schema_down
+-- Description: Rollback initial schema
+
+DROP TABLE IF EXISTS webhook_deliveries;
+DROP TABLE IF EXISTS webhooks;
+DROP TABLE IF EXISTS messages;
+DROP TABLE IF EXISTS chat_permissions;
+DROP TABLE IF EXISTS api_keys;
+DROP TABLE IF EXISTS chats;
+DROP TABLE IF EXISTS bots;
+DROP TABLE IF EXISTS role_permissions;
+DROP TABLE IF EXISTS user_roles;
+DROP TABLE IF EXISTS permissions;
+DROP TABLE IF EXISTS roles;
+DROP TABLE IF EXISTS refresh_tokens;
+DROP TABLE IF EXISTS users;
