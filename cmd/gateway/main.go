@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -11,6 +12,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
+	"github.com/soheilhy/cmux"
+	"google.golang.org/grpc"
 
 	"github.com/kexi/telegram-bot-gateway/internal/config"
 	"github.com/kexi/telegram-bot-gateway/internal/handler"
@@ -63,9 +66,9 @@ func main() {
 	jwtService := jwt.NewService(
 		cfg.Auth.JWT.Secret,
 		cfg.Auth.JWT.Issuer,
-		cfg.Auth.JWT.AccessTokenTTL,
-		cfg.Auth.JWT.RefreshTokenTTL,
-		cfg.Auth.JWT.RefreshThreshold,
+		cfg.Auth.JWT.AccessTokenTTL.Duration(),
+		cfg.Auth.JWT.RefreshTokenTTL.Duration(),
+		cfg.Auth.JWT.RefreshThreshold.Duration(),
 	)
 
 	apiKeyService := apikey.NewService(
@@ -110,7 +113,7 @@ func main() {
 		redisClient,
 		cfg.RateLimit.RequestsPerSecond,
 		cfg.RateLimit.Burst,
-		cfg.RateLimit.CleanupInterval,
+		cfg.RateLimit.CleanupInterval.Duration(),
 	)
 
 	// Setup Gin router
@@ -226,20 +229,81 @@ func main() {
 	httpServer := &http.Server{
 		Addr:         cfg.Server.HTTP.Address,
 		Handler:      router,
-		ReadTimeout:  cfg.Server.HTTP.ReadTimeout,
-		WriteTimeout: cfg.Server.HTTP.WriteTimeout,
-		IdleTimeout:  cfg.Server.HTTP.IdleTimeout,
+		ReadTimeout:  cfg.Server.HTTP.ReadTimeout.Duration(),
+		WriteTimeout: cfg.Server.HTTP.WriteTimeout.Duration(),
+		IdleTimeout:  cfg.Server.HTTP.IdleTimeout.Duration(),
 	}
 
-	// Start HTTP server in goroutine
-	go func() {
-		log.Printf("🚀 HTTP server starting on %s", cfg.Server.HTTP.Address)
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Failed to start HTTP server: %v", err)
-		}
-	}()
+	// Create gRPC server (placeholder - will be implemented when needed)
+	grpcServer := grpc.NewServer()
+	// TODO: Register gRPC services here when implementing gRPC API
 
-	log.Println("✓ All services started successfully")
+	// Start servers
+	if cfg.Server.UseSharedPort {
+		// Use cmux to multiplex HTTP and gRPC on the same port
+		log.Printf("🚀 Starting HTTP and gRPC on shared port %s", cfg.Server.Address)
+
+		listener, err := net.Listen("tcp", cfg.Server.Address)
+		if err != nil {
+			log.Fatalf("Failed to listen on %s: %v", cfg.Server.Address, err)
+		}
+
+		// Create a cmux multiplexer
+		m := cmux.New(listener)
+
+		// Match gRPC connections (HTTP/2 with content-type application/grpc)
+		grpcListener := m.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
+
+		// Match HTTP connections
+		httpListener := m.Match(cmux.HTTP1Fast(), cmux.HTTP2())
+
+		// Start gRPC server
+		go func() {
+			if err := grpcServer.Serve(grpcListener); err != nil {
+				log.Printf("gRPC server error: %v", err)
+			}
+		}()
+
+		// Start HTTP server
+		go func() {
+			if err := httpServer.Serve(httpListener); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("Failed to start HTTP server: %v", err)
+			}
+		}()
+
+		// Start multiplexer
+		go func() {
+			if err := m.Serve(); err != nil {
+				log.Printf("cmux server error: %v", err)
+			}
+		}()
+
+		log.Println("✓ Servers started on shared port successfully")
+	} else {
+		// Use separate ports for HTTP and gRPC
+		log.Printf("🚀 HTTP server starting on %s", cfg.Server.HTTP.Address)
+		log.Printf("🚀 gRPC server starting on %s", cfg.Server.GRPC.Address)
+
+		// Start gRPC server
+		go func() {
+			listener, err := net.Listen("tcp", cfg.Server.GRPC.Address)
+			if err != nil {
+				log.Fatalf("Failed to listen on %s: %v", cfg.Server.GRPC.Address, err)
+			}
+			if err := grpcServer.Serve(listener); err != nil {
+				log.Printf("gRPC server error: %v", err)
+			}
+		}()
+
+		// Start HTTP server
+		go func() {
+			if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("Failed to start HTTP server: %v", err)
+			}
+		}()
+
+		log.Println("✓ Servers started on separate ports successfully")
+	}
 	log.Println("✓ Press Ctrl+C to shutdown")
 
 	// Wait for interrupt signal for graceful shutdown
@@ -256,9 +320,13 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	// Shutdown HTTP server
 	if err := httpServer.Shutdown(ctx); err != nil {
 		log.Printf("HTTP server forced to shutdown: %v", err)
 	}
+
+	// Shutdown gRPC server
+	grpcServer.GracefulStop()
 
 	log.Println("✓ Servers stopped gracefully")
 }

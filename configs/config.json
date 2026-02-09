@@ -1,11 +1,13 @@
 {
   "server": {
     "mode": "debug",
+    "address": ":8080",
+    "use_shared_port": true,
     "http": {
       "address": ":8080"
     },
     "grpc": {
-      "address": ":9090"
+      "address": ":8080"
     }
   },
   "database": {

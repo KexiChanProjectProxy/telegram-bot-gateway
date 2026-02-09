@@ -8,6 +8,42 @@ import (
 	"time"
 )
 
+// Duration is a custom type that supports JSON unmarshaling from string
+type Duration time.Duration
+
+// UnmarshalJSON implements json.Unmarshaler
+func (d *Duration) UnmarshalJSON(b []byte) error {
+	var v interface{}
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+
+	switch value := v.(type) {
+	case float64:
+		*d = Duration(time.Duration(value))
+		return nil
+	case string:
+		duration, err := time.ParseDuration(value)
+		if err != nil {
+			return err
+		}
+		*d = Duration(duration)
+		return nil
+	default:
+		return fmt.Errorf("invalid duration type: %T", value)
+	}
+}
+
+// Duration returns the time.Duration value
+func (d Duration) Duration() time.Duration {
+	return time.Duration(d)
+}
+
+// MarshalJSON implements json.Marshaler
+func (d Duration) MarshalJSON() ([]byte, error) {
+	return json.Marshal(time.Duration(d).String())
+}
+
 // Config represents the application configuration
 type Config struct {
 	Server          ServerConfig          `json:"server"`
@@ -21,17 +57,19 @@ type Config struct {
 
 // ServerConfig holds server configuration
 type ServerConfig struct {
-	Mode string           `json:"mode"` // "debug", "release", "test"
-	HTTP HTTPServerConfig `json:"http"`
-	GRPC GRPCServerConfig `json:"grpc"`
+	Mode       string           `json:"mode"`        // "debug", "release", "test"
+	Address    string           `json:"address"`     // Shared address for HTTP and gRPC (e.g., ":8080")
+	UseSharedPort bool          `json:"use_shared_port"` // If true, HTTP and gRPC share the same port
+	HTTP       HTTPServerConfig `json:"http"`
+	GRPC       GRPCServerConfig `json:"grpc"`
 }
 
 // HTTPServerConfig holds HTTP server settings
 type HTTPServerConfig struct {
-	Address      string        `json:"address"`
-	ReadTimeout  time.Duration `json:"read_timeout"`
-	WriteTimeout time.Duration `json:"write_timeout"`
-	IdleTimeout  time.Duration `json:"idle_timeout"`
+	Address      string   `json:"address"`
+	ReadTimeout  Duration `json:"read_timeout"`
+	WriteTimeout Duration `json:"write_timeout"`
+	IdleTimeout  Duration `json:"idle_timeout"`
 }
 
 // GRPCServerConfig holds gRPC server settings
@@ -67,11 +105,11 @@ type AuthConfig struct {
 
 // JWTConfig holds JWT token settings
 type JWTConfig struct {
-	Secret            string        `json:"secret"`
-	AccessTokenTTL    time.Duration `json:"access_token_ttl"`
-	RefreshTokenTTL   time.Duration `json:"refresh_token_ttl"`
-	Issuer            string        `json:"issuer"`
-	RefreshThreshold  time.Duration `json:"refresh_threshold"` // Auto-refresh if token expires within this duration
+	Secret           string   `json:"secret"`
+	AccessTokenTTL   Duration `json:"access_token_ttl"`
+	RefreshTokenTTL  Duration `json:"refresh_token_ttl"`
+	Issuer           string   `json:"issuer"`
+	RefreshThreshold Duration `json:"refresh_threshold"` // Auto-refresh if token expires within this duration
 }
 
 // APIKeyConfig holds API key settings
@@ -82,23 +120,23 @@ type APIKeyConfig struct {
 
 // TelegramConfig holds Telegram API settings
 type TelegramConfig struct {
-	WebhookBaseURL string        `json:"webhook_base_url"` // e.g., "https://your-domain.com"
-	Timeout        time.Duration `json:"timeout"`
+	WebhookBaseURL string   `json:"webhook_base_url"` // e.g., "https://your-domain.com"
+	Timeout        Duration `json:"timeout"`
 }
 
 // WebhookDeliveryConfig holds webhook worker settings
 type WebhookDeliveryConfig struct {
-	WorkerCount int           `json:"worker_count"`
-	MaxRetries  int           `json:"max_retries"`
-	Timeout     time.Duration `json:"timeout"`
-	QueueName   string        `json:"queue_name"`
+	WorkerCount int      `json:"worker_count"`
+	MaxRetries  int      `json:"max_retries"`
+	Timeout     Duration `json:"timeout"`
+	QueueName   string   `json:"queue_name"`
 }
 
 // RateLimitConfig holds rate limiting settings
 type RateLimitConfig struct {
-	RequestsPerSecond int           `json:"requests_per_second"`
-	Burst             int           `json:"burst"`
-	CleanupInterval   time.Duration `json:"cleanup_interval"`
+	RequestsPerSecond int      `json:"requests_per_second"`
+	Burst             int      `json:"burst"`
+	CleanupInterval   Duration `json:"cleanup_interval"`
 }
 
 // Load loads configuration from a JSON file
@@ -146,21 +184,33 @@ func (c *Config) setDefaults() {
 		c.Server.Mode = "release"
 	}
 
+	if c.Server.Address == "" {
+		c.Server.Address = ":8080"
+	}
+
 	if c.Server.HTTP.Address == "" {
-		c.Server.HTTP.Address = ":8080"
+		if c.Server.UseSharedPort {
+			c.Server.HTTP.Address = c.Server.Address
+		} else {
+			c.Server.HTTP.Address = ":8080"
+		}
 	}
 	if c.Server.HTTP.ReadTimeout == 0 {
-		c.Server.HTTP.ReadTimeout = 30 * time.Second
+		c.Server.HTTP.ReadTimeout = Duration(30 * time.Second)
 	}
 	if c.Server.HTTP.WriteTimeout == 0 {
-		c.Server.HTTP.WriteTimeout = 30 * time.Second
+		c.Server.HTTP.WriteTimeout = Duration(30 * time.Second)
 	}
 	if c.Server.HTTP.IdleTimeout == 0 {
-		c.Server.HTTP.IdleTimeout = 120 * time.Second
+		c.Server.HTTP.IdleTimeout = Duration(120 * time.Second)
 	}
 
 	if c.Server.GRPC.Address == "" {
-		c.Server.GRPC.Address = ":9090"
+		if c.Server.UseSharedPort {
+			c.Server.GRPC.Address = c.Server.Address
+		} else {
+			c.Server.GRPC.Address = ":9090"
+		}
 	}
 
 	if c.Database.Driver == "" {
@@ -184,16 +234,16 @@ func (c *Config) setDefaults() {
 	}
 
 	if c.Auth.JWT.AccessTokenTTL == 0 {
-		c.Auth.JWT.AccessTokenTTL = 15 * time.Minute
+		c.Auth.JWT.AccessTokenTTL = Duration(15 * time.Minute)
 	}
 	if c.Auth.JWT.RefreshTokenTTL == 0 {
-		c.Auth.JWT.RefreshTokenTTL = 7 * 24 * time.Hour
+		c.Auth.JWT.RefreshTokenTTL = Duration(7 * 24 * time.Hour)
 	}
 	if c.Auth.JWT.Issuer == "" {
 		c.Auth.JWT.Issuer = "telegram-bot-gateway"
 	}
 	if c.Auth.JWT.RefreshThreshold == 0 {
-		c.Auth.JWT.RefreshThreshold = 5 * time.Minute
+		c.Auth.JWT.RefreshThreshold = Duration(5 * time.Minute)
 	}
 
 	if c.Auth.APIKey.Prefix == "" {
@@ -204,7 +254,7 @@ func (c *Config) setDefaults() {
 	}
 
 	if c.Telegram.Timeout == 0 {
-		c.Telegram.Timeout = 30 * time.Second
+		c.Telegram.Timeout = Duration(30 * time.Second)
 	}
 
 	if c.WebhookDelivery.WorkerCount == 0 {
@@ -214,7 +264,7 @@ func (c *Config) setDefaults() {
 		c.WebhookDelivery.MaxRetries = 5
 	}
 	if c.WebhookDelivery.Timeout == 0 {
-		c.WebhookDelivery.Timeout = 30 * time.Second
+		c.WebhookDelivery.Timeout = Duration(30 * time.Second)
 	}
 	if c.WebhookDelivery.QueueName == "" {
 		c.WebhookDelivery.QueueName = "webhook_deliveries"
@@ -227,7 +277,7 @@ func (c *Config) setDefaults() {
 		c.RateLimit.Burst = 200
 	}
 	if c.RateLimit.CleanupInterval == 0 {
-		c.RateLimit.CleanupInterval = 1 * time.Minute
+		c.RateLimit.CleanupInterval = Duration(1 * time.Minute)
 	}
 }
 
