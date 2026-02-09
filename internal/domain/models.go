@@ -116,7 +116,35 @@ type APIKey struct {
 	UpdatedAt   time.Time  `json:"updated_at"`
 
 	// Relationships
-	ChatPermissions []ChatPermission `gorm:"foreignKey:APIKeyID" json:"-"`
+	ChatPermissions     []ChatPermission             `gorm:"foreignKey:APIKeyID" json:"-"`
+	BotPermissions      []APIKeyBotPermission        `gorm:"foreignKey:APIKeyID" json:"-"`
+	FeedbackPermissions []APIKeyFeedbackPermission   `gorm:"foreignKey:APIKeyID" json:"-"`
+}
+
+// APIKeyBotPermission restricts which bots an API key can use
+type APIKeyBotPermission struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	APIKeyID  uint      `gorm:"not null;uniqueIndex:idx_apikey_bot" json:"api_key_id"`
+	BotID     uint      `gorm:"not null;uniqueIndex:idx_apikey_bot" json:"bot_id"`
+	CanSend   bool      `gorm:"default:true" json:"can_send"`
+	CreatedAt time.Time `json:"created_at"`
+
+	// Relationships
+	APIKey APIKey `gorm:"foreignKey:APIKeyID" json:"-"`
+	Bot    Bot    `gorm:"foreignKey:BotID" json:"-"`
+}
+
+// APIKeyFeedbackPermission controls which chats can push messages
+type APIKeyFeedbackPermission struct {
+	ID                 uint      `gorm:"primaryKey" json:"id"`
+	APIKeyID           uint      `gorm:"not null;uniqueIndex:idx_apikey_feedback_chat" json:"api_key_id"`
+	ChatID             uint      `gorm:"not null;uniqueIndex:idx_apikey_feedback_chat" json:"chat_id"`
+	CanReceiveFeedback bool      `gorm:"default:true" json:"can_receive_feedback"`
+	CreatedAt          time.Time `json:"created_at"`
+
+	// Relationships
+	APIKey APIKey `gorm:"foreignKey:APIKeyID" json:"-"`
+	Chat   Chat   `gorm:"foreignKey:ChatID" json:"-"`
 }
 
 // Message represents a Telegram message
@@ -190,14 +218,16 @@ type RefreshToken struct {
 }
 
 // TableName methods to ensure correct table names
-func (User) TableName() string            { return "users" }
-func (Role) TableName() string            { return "roles" }
-func (Permission) TableName() string      { return "permissions" }
-func (Bot) TableName() string             { return "bots" }
-func (Chat) TableName() string            { return "chats" }
-func (ChatPermission) TableName() string  { return "chat_permissions" }
-func (APIKey) TableName() string          { return "api_keys" }
-func (Message) TableName() string         { return "messages" }
-func (Webhook) TableName() string         { return "webhooks" }
-func (WebhookDelivery) TableName() string { return "webhook_deliveries" }
-func (RefreshToken) TableName() string    { return "refresh_tokens" }
+func (User) TableName() string                       { return "users" }
+func (Role) TableName() string                       { return "roles" }
+func (Permission) TableName() string                 { return "permissions" }
+func (Bot) TableName() string                        { return "bots" }
+func (Chat) TableName() string                       { return "chats" }
+func (ChatPermission) TableName() string             { return "chat_permissions" }
+func (APIKey) TableName() string                     { return "api_keys" }
+func (APIKeyBotPermission) TableName() string        { return "api_key_bot_permissions" }
+func (APIKeyFeedbackPermission) TableName() string   { return "api_key_feedback_permissions" }
+func (Message) TableName() string                    { return "messages" }
+func (Webhook) TableName() string                    { return "webhooks" }
+func (WebhookDelivery) TableName() string            { return "webhook_deliveries" }
+func (RefreshToken) TableName() string               { return "refresh_tokens" }

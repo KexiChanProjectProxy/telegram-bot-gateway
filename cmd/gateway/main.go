@@ -93,14 +93,14 @@ func main() {
 	botService := service.NewBotService(botRepo, cfg.Auth.JWT.Secret)
 	chatService := service.NewChatService(chatRepo, botRepo)
 	messageService := service.NewMessageService(messageRepo, chatRepo)
-	apiKeySvc := service.NewAPIKeyService(apiKeyRepo, apiKeyService)
+	// apiKeySvc removed - API key management moved to CLI tool
 	webhookService := service.NewWebhookService(webhookRepo, chatRepo)
 
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(authService)
 	botHandler := handler.NewBotHandler(botService)
 	chatHandler := handler.NewChatHandler(chatService, messageService)
-	apiKeyHandler := handler.NewAPIKeyHandler(apiKeySvc)
+	// apiKeyHandler removed - API key management moved to CLI tool
 	webhookHandler := handler.NewWebhookHandler(webhookService)
 	telegramHandler := handler.NewTelegramHandler(botService, chatService, messageService, messageBroker)
 	wsHandler := handler.NewWebSocketHandler(wsHub)
@@ -172,15 +172,15 @@ func main() {
 				)
 			}
 
-			// API key management
-			apikeys := protected.Group("/apikeys")
-			{
-				apikeys.POST("", apiKeyHandler.CreateAPIKey)
-				apikeys.GET("", apiKeyHandler.ListAPIKeys)
-				apikeys.GET("/:id", apiKeyHandler.GetAPIKey)
-				apikeys.POST("/:id/revoke", apiKeyHandler.RevokeAPIKey)
-				apikeys.DELETE("/:id", apiKeyHandler.DeleteAPIKey)
-			}
+			// API key management - DISABLED (use CLI: ./bin/apikey)
+			// apikeys := protected.Group("/apikeys")
+			// {
+			//     apikeys.POST("", apiKeyHandler.CreateAPIKey)
+			//     apikeys.GET("", apiKeyHandler.ListAPIKeys)
+			//     apikeys.GET("/:id", apiKeyHandler.GetAPIKey)
+			//     apikeys.POST("/:id/revoke", apiKeyHandler.RevokeAPIKey)
+			//     apikeys.DELETE("/:id", apiKeyHandler.DeleteAPIKey)
+			// }
 
 			// Webhook management
 			webhooks := protected.Group("/webhooks")

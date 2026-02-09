@@ -287,6 +287,7 @@ type ChatPermissionRepository interface {
 	GetByAPIKeyAndChat(ctx context.Context, apiKeyID, chatID uint) (*domain.ChatPermission, error)
 	ListByChat(ctx context.Context, chatID uint) ([]domain.ChatPermission, error)
 	ListByUser(ctx context.Context, userID uint) ([]domain.ChatPermission, error)
+	ListByAPIKey(ctx context.Context, apiKeyID uint) ([]domain.ChatPermission, error)
 	Update(ctx context.Context, permission *domain.ChatPermission) error
 	Delete(ctx context.Context, id uint) error
 }
@@ -360,6 +361,15 @@ func (r *chatPermissionRepository) Update(ctx context.Context, permission *domai
 
 func (r *chatPermissionRepository) Delete(ctx context.Context, id uint) error {
 	return r.db.WithContext(ctx).Delete(&domain.ChatPermission{}, id).Error
+}
+
+func (r *chatPermissionRepository) ListByAPIKey(ctx context.Context, apiKeyID uint) ([]domain.ChatPermission, error) {
+	var permissions []domain.ChatPermission
+	err := r.db.WithContext(ctx).
+		Preload("Chat").
+		Where("api_key_id = ?", apiKeyID).
+		Find(&permissions).Error
+	return permissions, err
 }
 
 // APIKeyRepository defines operations for API key management
@@ -592,4 +602,138 @@ func (r *refreshTokenRepository) DeleteExpired(ctx context.Context) error {
 	return r.db.WithContext(ctx).
 		Where("expires_at < ? OR revoked_at IS NOT NULL", time.Now().AddDate(0, 0, -30)).
 		Delete(&domain.RefreshToken{}).Error
+}
+
+// APIKeyBotPermissionRepository defines operations for API key bot permissions
+type APIKeyBotPermissionRepository interface {
+	Create(ctx context.Context, perm *domain.APIKeyBotPermission) error
+	ListByAPIKey(ctx context.Context, apiKeyID uint) ([]domain.APIKeyBotPermission, error)
+	Delete(ctx context.Context, apiKeyID, botID uint) error
+	HasBotAccess(ctx context.Context, apiKeyID, botID uint) (bool, error)
+}
+
+type apiKeyBotPermissionRepository struct {
+	db *gorm.DB
+}
+
+// NewAPIKeyBotPermissionRepository creates a new API key bot permission repository
+func NewAPIKeyBotPermissionRepository(db *gorm.DB) APIKeyBotPermissionRepository {
+	return &apiKeyBotPermissionRepository{db: db}
+}
+
+func (r *apiKeyBotPermissionRepository) Create(ctx context.Context, perm *domain.APIKeyBotPermission) error {
+	return r.db.WithContext(ctx).Create(perm).Error
+}
+
+func (r *apiKeyBotPermissionRepository) ListByAPIKey(ctx context.Context, apiKeyID uint) ([]domain.APIKeyBotPermission, error) {
+	var perms []domain.APIKeyBotPermission
+	err := r.db.WithContext(ctx).
+		Preload("Bot").
+		Where("api_key_id = ?", apiKeyID).
+		Find(&perms).Error
+	return perms, err
+}
+
+func (r *apiKeyBotPermissionRepository) Delete(ctx context.Context, apiKeyID, botID uint) error {
+	return r.db.WithContext(ctx).
+		Where("api_key_id = ? AND bot_id = ?", apiKeyID, botID).
+		Delete(&domain.APIKeyBotPermission{}).Error
+}
+
+func (r *apiKeyBotPermissionRepository) HasBotAccess(ctx context.Context, apiKeyID, botID uint) (bool, error) {
+	// First check if there are ANY bot permissions for this API key
+	var count int64
+	if err := r.db.WithContext(ctx).
+		Model(&domain.APIKeyBotPermission{}).
+		Where("api_key_id = ?", apiKeyID).
+		Count(&count).Error; err != nil {
+		return false, err
+	}
+
+	// If no bot permissions exist, all bots are allowed (default behavior)
+	if count == 0 {
+		return true, nil
+	}
+
+	// If bot permissions exist, check if this specific bot is allowed
+	var perm domain.APIKeyBotPermission
+	err := r.db.WithContext(ctx).
+		Where("api_key_id = ? AND bot_id = ? AND can_send = ?", apiKeyID, botID, true).
+		First(&perm).Error
+
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return true, nil
+}
+
+// APIKeyFeedbackPermissionRepository defines operations for API key feedback permissions
+type APIKeyFeedbackPermissionRepository interface {
+	Create(ctx context.Context, perm *domain.APIKeyFeedbackPermission) error
+	ListByAPIKey(ctx context.Context, apiKeyID uint) ([]domain.APIKeyFeedbackPermission, error)
+	Delete(ctx context.Context, apiKeyID, chatID uint) error
+	CanReceiveFeedback(ctx context.Context, apiKeyID, chatID uint) (bool, error)
+}
+
+type apiKeyFeedbackPermissionRepository struct {
+	db *gorm.DB
+}
+
+// NewAPIKeyFeedbackPermissionRepository creates a new API key feedback permission repository
+func NewAPIKeyFeedbackPermissionRepository(db *gorm.DB) APIKeyFeedbackPermissionRepository {
+	return &apiKeyFeedbackPermissionRepository{db: db}
+}
+
+func (r *apiKeyFeedbackPermissionRepository) Create(ctx context.Context, perm *domain.APIKeyFeedbackPermission) error {
+	return r.db.WithContext(ctx).Create(perm).Error
+}
+
+func (r *apiKeyFeedbackPermissionRepository) ListByAPIKey(ctx context.Context, apiKeyID uint) ([]domain.APIKeyFeedbackPermission, error) {
+	var perms []domain.APIKeyFeedbackPermission
+	err := r.db.WithContext(ctx).
+		Preload("Chat").
+		Where("api_key_id = ?", apiKeyID).
+		Find(&perms).Error
+	return perms, err
+}
+
+func (r *apiKeyFeedbackPermissionRepository) Delete(ctx context.Context, apiKeyID, chatID uint) error {
+	return r.db.WithContext(ctx).
+		Where("api_key_id = ? AND chat_id = ?", apiKeyID, chatID).
+		Delete(&domain.APIKeyFeedbackPermission{}).Error
+}
+
+func (r *apiKeyFeedbackPermissionRepository) CanReceiveFeedback(ctx context.Context, apiKeyID, chatID uint) (bool, error) {
+	// First check if there are ANY feedback permissions for this API key
+	var count int64
+	if err := r.db.WithContext(ctx).
+		Model(&domain.APIKeyFeedbackPermission{}).
+		Where("api_key_id = ?", apiKeyID).
+		Count(&count).Error; err != nil {
+		return false, err
+	}
+
+	// If no feedback permissions exist, all chats can send feedback (default behavior)
+	if count == 0 {
+		return true, nil
+	}
+
+	// If feedback permissions exist, check if this specific chat is allowed
+	var perm domain.APIKeyFeedbackPermission
+	err := r.db.WithContext(ctx).
+		Where("api_key_id = ? AND chat_id = ? AND can_receive_feedback = ?", apiKeyID, chatID, true).
+		First(&perm).Error
+
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return true, nil
 }

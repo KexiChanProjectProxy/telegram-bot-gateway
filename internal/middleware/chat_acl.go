@@ -132,3 +132,80 @@ func checkChatPermission(ctx context.Context, authCtx *AuthContext, chatID uint,
 
 	return allowed, nil
 }
+
+// ChatACLMiddlewareWithBotCheck checks both chat permissions and bot restrictions
+func ChatACLMiddlewareWithBotCheck(
+	permission string,
+	chatPermRepo repository.ChatPermissionRepository,
+	chatRepo repository.ChatRepository,
+	botPermRepo repository.APIKeyBotPermissionRepository,
+	redisClient *redis.Client,
+) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Get auth context
+		authCtx, exists := GetAuthContext(c)
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+			c.Abort()
+			return
+		}
+
+		// Get chat ID from URL parameter
+		chatIDStr := c.Param("id")
+		if chatIDStr == "" {
+			chatIDStr = c.Param("chat_id")
+		}
+		if chatIDStr == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Chat ID required"})
+			c.Abort()
+			return
+		}
+
+		chatID, err := strconv.ParseUint(chatIDStr, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chat ID"})
+			c.Abort()
+			return
+		}
+
+		// Check chat permission first
+		allowed, err := checkChatPermission(c.Request.Context(), authCtx, uint(chatID), permission, chatPermRepo, redisClient)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check permissions"})
+			c.Abort()
+			return
+		}
+
+		if !allowed {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Insufficient permissions for this chat"})
+			c.Abort()
+			return
+		}
+
+		// For API keys sending messages, verify bot permission
+		if authCtx.IsAPIKey && permission == PermissionSend {
+			chat, err := chatRepo.GetByID(c.Request.Context(), uint(chatID))
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve chat"})
+				c.Abort()
+				return
+			}
+
+			// Check if API key has permission to use this chat's bot
+			botAllowed, err := botPermRepo.HasBotAccess(c.Request.Context(), *authCtx.APIKeyID, chat.BotID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check bot permissions"})
+				c.Abort()
+				return
+			}
+
+			if !botAllowed {
+				c.JSON(http.StatusForbidden, gin.H{"error": "API key not authorized for this bot"})
+				c.Abort()
+				return
+			}
+		}
+
+		c.Next()
+	}
+}
