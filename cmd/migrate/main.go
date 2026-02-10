@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/kexi/telegram-bot-gateway/internal/config"
@@ -74,10 +75,73 @@ func runMigration(db *sql.DB, migrationFile string) error {
 		return fmt.Errorf("failed to read migration file %s: %w", migrationFile, err)
 	}
 
-	_, err = db.Exec(string(content))
-	if err != nil {
-		return fmt.Errorf("failed to execute migration: %w", err)
+	// Split SQL statements by semicolon
+	statements := splitSQLStatements(string(content))
+
+	// Execute each statement
+	for i, stmt := range statements {
+		stmt = strings.TrimSpace(stmt)
+		if stmt == "" || strings.HasPrefix(stmt, "--") {
+			continue
+		}
+
+		_, err = db.Exec(stmt)
+		if err != nil {
+			return fmt.Errorf("failed to execute statement %d: %w\nStatement: %s", i+1, err, stmt)
+		}
 	}
 
 	return nil
+}
+
+// splitSQLStatements splits SQL content by semicolons, ignoring semicolons in comments
+func splitSQLStatements(content string) []string {
+	var statements []string
+	var current strings.Builder
+	inBlockComment := false
+
+	lines := strings.Split(content, "\n")
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Handle line comments
+		if strings.HasPrefix(trimmed, "--") {
+			continue
+		}
+
+		// Handle block comments
+		if strings.Contains(line, "/*") {
+			inBlockComment = true
+		}
+		if strings.Contains(line, "*/") {
+			inBlockComment = false
+			continue
+		}
+		if inBlockComment {
+			continue
+		}
+
+		// Add line to current statement
+		current.WriteString(line)
+		current.WriteString("\n")
+
+		// Check if line ends with semicolon (end of statement)
+		if strings.HasSuffix(trimmed, ";") {
+			stmt := strings.TrimSpace(current.String())
+			if stmt != "" {
+				statements = append(statements, stmt)
+			}
+			current.Reset()
+		}
+	}
+
+	// Add any remaining statement
+	if current.Len() > 0 {
+		stmt := strings.TrimSpace(current.String())
+		if stmt != "" {
+			statements = append(statements, stmt)
+		}
+	}
+
+	return statements
 }
