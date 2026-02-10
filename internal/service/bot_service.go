@@ -12,7 +12,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 
 	"github.com/kexi/telegram-bot-gateway/internal/domain"
 	"github.com/kexi/telegram-bot-gateway/internal/repository"
@@ -24,10 +27,11 @@ type BotService struct {
 	encryptionKey  []byte
 	webhookBaseURL string
 	httpClient     *http.Client
+	redisClient    *redis.Client
 }
 
 // NewBotService creates a new bot service
-func NewBotService(botRepo repository.BotRepository, encryptionKey, webhookBaseURL string) *BotService {
+func NewBotService(botRepo repository.BotRepository, encryptionKey, webhookBaseURL string, redisClient *redis.Client) *BotService {
 	// Ensure key is 32 bytes for AES-256
 	key := []byte(encryptionKey)
 	if len(key) < 32 {
@@ -46,6 +50,7 @@ func NewBotService(botRepo repository.BotRepository, encryptionKey, webhookBaseU
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
+		redisClient: redisClient,
 	}
 }
 
@@ -237,15 +242,48 @@ func (s *BotService) DeleteBot(ctx context.Context, id uint) error {
 		fmt.Printf("Warning: failed to delete Telegram webhook: %v\n", err)
 	}
 
+	// Invalidate cache
+	if s.redisClient != nil {
+		cacheKey := fmt.Sprintf("bot:webhook:%s", bot.WebhookSecret)
+		s.redisClient.Del(ctx, cacheKey)
+	}
+
 	// Delete from database
 	return s.botRepo.Delete(ctx, id)
 }
 
-// GetBotByWebhookSecret retrieves a bot by webhook secret
+// GetBotByWebhookSecret retrieves a bot by webhook secret (with Redis caching)
 func (s *BotService) GetBotByWebhookSecret(ctx context.Context, secret string) (*BotDTO, error) {
+	// Try cache first (if Redis is available)
+	if s.redisClient != nil {
+		cacheKey := fmt.Sprintf("bot:webhook:%s", secret)
+
+		// Try to get bot ID from cache
+		cached, err := s.redisClient.Get(ctx, cacheKey).Result()
+		if err == nil {
+			// Parse bot ID from cache
+			botID, err := strconv.ParseUint(cached, 10, 64)
+			if err == nil {
+				// Get full bot details (this may also be cached in the future)
+				bot, err := s.GetBot(ctx, uint(botID))
+				if err == nil {
+					return bot, nil
+				}
+				// If bot not found, fall through to DB lookup (cache might be stale)
+			}
+		}
+	}
+
+	// Not in cache or cache miss, query database
 	bot, err := s.botRepo.GetByWebhookSecret(ctx, secret)
 	if err != nil {
 		return nil, fmt.Errorf("bot not found: %w", err)
+	}
+
+	// Cache the webhook_secret -> bot_id mapping for 10 minutes
+	if s.redisClient != nil {
+		cacheKey := fmt.Sprintf("bot:webhook:%s", secret)
+		s.redisClient.Set(ctx, cacheKey, fmt.Sprintf("%d", bot.ID), 10*time.Minute)
 	}
 
 	return &BotDTO{

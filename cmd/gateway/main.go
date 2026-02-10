@@ -93,7 +93,7 @@ func main() {
 
 	// Initialize business services
 	authService := service.NewAuthService(userRepo, refreshTokenRepo, jwtService)
-	botService := service.NewBotService(botRepo, cfg.Auth.JWT.Secret, cfg.Telegram.WebhookBaseURL)
+	botService := service.NewBotService(botRepo, cfg.Auth.JWT.Secret, cfg.Telegram.WebhookBaseURL, redisClient)
 	chatService := service.NewChatService(chatRepo, botRepo)
 	messageService := service.NewMessageService(messageRepo, chatRepo)
 	// apiKeySvc removed - API key management moved to CLI tool

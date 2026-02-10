@@ -46,7 +46,7 @@ func initBotService(db *gorm.DB) (*service.BotService, error) {
 	}
 
 	botRepo := repository.NewBotRepository(db)
-	botService := service.NewBotService(botRepo, cfg.Auth.JWT.Secret, cfg.Telegram.WebhookBaseURL)
+	botService := service.NewBotService(botRepo, cfg.Auth.JWT.Secret, cfg.Telegram.WebhookBaseURL, nil)
 
 	return botService, nil
 }
