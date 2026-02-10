@@ -10,11 +10,12 @@ import (
 const grantChatUsage = `Grant chat permissions to an API key
 
 Usage:
-  apikey grant-chat <apikey-id> <chat-id> [--read] [--send] [--manage]
+  apikey grant-chat <apikey-id> <bot-id> <telegram-chat-id> [--read] [--send] [--manage]
 
 Arguments:
   <apikey-id>               API key ID
-  <chat-id>                 Chat ID
+  <bot-id>                  Bot ID
+  <telegram-chat-id>        Telegram chat ID (the actual Telegram chat identifier)
 
 Options:
   --read                    Grant read permission
@@ -23,16 +24,17 @@ Options:
   --help, -h                Show this help message
 
 Examples:
-  apikey grant-chat 1 5 --read --send
-  apikey grant-chat 1 8 --read
-  apikey grant-chat 1 10 --read --send --manage
+  apikey grant-chat 1 1 1878878763 --read --send
+  apikey grant-chat 1 1 -1001234567890 --read
+  apikey grant-chat 1 2 987654321 --read --send --manage
 
 Note: If no permissions are specified, no permissions will be granted.
       You must explicitly specify at least one permission flag.
+      The telegram-chat-id is the actual chat ID from Telegram, not the internal database ID.
 `
 
 func GrantChatPermission(args []string) {
-	if hasFlag(args, "--help", "-h") || len(args) < 2 {
+	if hasFlag(args, "--help", "-h") || len(args) < 3 {
 		fmt.Println(grantChatUsage)
 		return
 	}
@@ -42,9 +44,14 @@ func GrantChatPermission(args []string) {
 		fatal("Invalid API key ID: %s", args[0])
 	}
 
-	chatID, err := strconv.ParseUint(args[1], 10, 64)
+	botID, err := strconv.ParseUint(args[1], 10, 64)
 	if err != nil {
-		fatal("Invalid chat ID: %s", args[1])
+		fatal("Invalid bot ID: %s", args[1])
+	}
+
+	telegramChatID, err := strconv.ParseInt(args[2], 10, 64)
+	if err != nil {
+		fatal("Invalid Telegram chat ID: %s", args[2])
 	}
 
 	canRead := hasFlag(args, "--read")
@@ -65,13 +72,19 @@ func GrantChatPermission(args []string) {
 		sqlDB.Close()
 	}()
 
-	_, chatPermRepo, _, _, _, _ := initRepositories(db)
+	_, chatPermRepo, _, _, chatRepo, _ := initRepositories(db)
 
 	ctx, cancel := getContext()
 	defer cancel()
 
+	// Look up the chat by bot_id and telegram_chat_id
+	chat, err := chatRepo.GetByBotAndTelegramID(ctx, uint(botID), telegramChatID)
+	if err != nil {
+		fatal("Chat not found for bot %d and Telegram chat ID %d. Make sure the bot has received at least one message from this chat.", botID, telegramChatID)
+	}
+
 	// Check if permission already exists
-	existingPerm, err := chatPermRepo.GetByAPIKeyAndChat(ctx, uint(apiKeyID), uint(chatID))
+	existingPerm, err := chatPermRepo.GetByAPIKeyAndChat(ctx, uint(apiKeyID), chat.ID)
 	if err == nil {
 		// Update existing permission
 		existingPerm.CanRead = existingPerm.CanRead || canRead
@@ -81,12 +94,12 @@ func GrantChatPermission(args []string) {
 		if err := chatPermRepo.Update(ctx, existingPerm); err != nil {
 			fatal("Failed to update chat permission: %v", err)
 		}
-		success("Updated chat permission for API key %d on chat %d", apiKeyID, chatID)
+		success("Updated chat permission for API key %d on chat %d (Telegram ID: %d)", apiKeyID, chat.ID, telegramChatID)
 	} else {
 		// Create new permission
 		akID := uint(apiKeyID)
 		perm := &domain.ChatPermission{
-			ChatID:    uint(chatID),
+			ChatID:    chat.ID,
 			APIKeyID:  &akID,
 			CanRead:   canRead,
 			CanSend:   canSend,
@@ -96,7 +109,7 @@ func GrantChatPermission(args []string) {
 		if err := chatPermRepo.Create(ctx, perm); err != nil {
 			fatal("Failed to grant chat permission: %v", err)
 		}
-		success("Granted chat permission for API key %d on chat %d", apiKeyID, chatID)
+		success("Granted chat permission for API key %d on chat %d (Telegram ID: %d)", apiKeyID, chat.ID, telegramChatID)
 	}
 
 	var perms []string
