@@ -169,8 +169,8 @@ func (s *MessageServiceServer) GetMessages(ctx context.Context, req *pb.GetMessa
 
 	// Convert cursor
 	var cursor *time.Time
-	if req.Cursor != nil {
-		t := req.Cursor.AsTime()
+	if req.Cursor != 0 {
+		t := time.Unix(req.Cursor, 0)
 		cursor = &t
 	}
 

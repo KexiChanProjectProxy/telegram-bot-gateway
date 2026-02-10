@@ -273,6 +273,64 @@ func (s *BotService) SetWebhook(ctx context.Context, botID uint) error {
 	return s.setTelegramWebhook(ctx, token, bot.WebhookURL)
 }
 
+// SendTelegramMessage sends a message via Telegram Bot API
+func (s *BotService) SendTelegramMessage(ctx context.Context, botID uint, chatID int64, text string, replyToMessageID *int64, parseMode string) error {
+	// Get decrypted token
+	token, err := s.GetBotToken(ctx, botID)
+	if err != nil {
+		return fmt.Errorf("failed to get bot token: %w", err)
+	}
+
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", token)
+
+	payload := map[string]interface{}{
+		"chat_id": chatID,
+		"text":    text,
+	}
+	if replyToMessageID != nil {
+		payload["reply_to_message_id"] = *replyToMessageID
+	}
+	if parseMode != "" {
+		payload["parse_mode"] = parseMode
+	}
+
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to call Telegram API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("Telegram API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result struct {
+		Ok          bool   `json:"ok"`
+		Description string `json:"description"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	if !result.Ok {
+		return fmt.Errorf("Telegram API error: %s", result.Description)
+	}
+
+	return nil
+}
+
 // setTelegramWebhook calls Telegram API to set webhook
 func (s *BotService) setTelegramWebhook(ctx context.Context, token, webhookURL string) error {
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/setWebhook", token)

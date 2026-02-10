@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -186,6 +187,17 @@ func (h *TelegramHandler) processUpdate(ctx context.Context, botID uint, update 
 		return nil
 	}
 
+	// Check for gateway commands before processing message
+	if msg != nil && msg.Text != "" {
+		handled, err := h.handleGatewayCommand(ctx, botID, update, msg)
+		if err != nil {
+			fmt.Printf("Warning: gateway command error: %v\n", err)
+		}
+		if handled {
+			return nil
+		}
+	}
+
 	// Create or update chat
 	chatReq := &service.CreateChatRequest{
 		BotID:      botID,
@@ -285,4 +297,94 @@ func (h *TelegramHandler) processUpdate(ctx context.Context, botID uint, update 
 	// For each active webhook matching this chat/scope, create a delivery job
 
 	return nil
+}
+
+// handleGatewayCommand checks if a message is a gateway command and handles it
+func (h *TelegramHandler) handleGatewayCommand(ctx context.Context, botID uint, update *TelegramUpdate, msg *TelegramMessage) (bool, error) {
+	text := strings.TrimSpace(msg.Text)
+	if !strings.HasPrefix(text, "/") {
+		return false, nil
+	}
+
+	// Extract command (handle /command@botname format)
+	parts := strings.Fields(text)
+	if len(parts) == 0 {
+		return false, nil
+	}
+
+	cmd := parts[0]
+	// Remove @botname suffix if present
+	if idx := strings.Index(cmd, "@"); idx != -1 {
+		cmd = cmd[:idx]
+	}
+
+	// Dispatch to command handlers
+	switch cmd {
+	case "/debuggateway":
+		return true, h.handleDebugGateway(ctx, botID, update, msg)
+	default:
+		return false, nil
+	}
+}
+
+// handleDebugGateway dumps the raw Telegram Update as JSON reply
+func (h *TelegramHandler) handleDebugGateway(ctx context.Context, botID uint, update *TelegramUpdate, msg *TelegramMessage) error {
+	// Pretty-print the update as JSON
+	jsonData, err := json.MarshalIndent(update, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal update: %w", err)
+	}
+
+	// Wrap in HTML pre tags for better formatting
+	text := fmt.Sprintf("<pre>%s</pre>", escapeHTML(string(jsonData)))
+
+	// Split if necessary (Telegram has 4096 char limit)
+	chunks := splitMessage(text, 4096)
+
+	// Send each chunk as a reply
+	replyTo := &msg.MessageID
+	for _, chunk := range chunks {
+		if err := h.botService.SendTelegramMessage(ctx, botID, msg.Chat.ID, chunk, replyTo, "HTML"); err != nil {
+			return fmt.Errorf("failed to send debug message: %w", err)
+		}
+		// Only reply to the original message for the first chunk
+		replyTo = nil
+	}
+
+	return nil
+}
+
+// splitMessage splits a message into chunks at newline boundaries
+func splitMessage(s string, maxLen int) []string {
+	if len(s) <= maxLen {
+		return []string{s}
+	}
+
+	var chunks []string
+	remaining := s
+
+	for len(remaining) > maxLen {
+		// Find the last newline before maxLen
+		splitPos := maxLen
+		if idx := strings.LastIndex(remaining[:maxLen], "\n"); idx != -1 {
+			splitPos = idx + 1
+		}
+
+		chunks = append(chunks, remaining[:splitPos])
+		remaining = remaining[splitPos:]
+	}
+
+	if len(remaining) > 0 {
+		chunks = append(chunks, remaining)
+	}
+
+	return chunks
+}
+
+// escapeHTML escapes HTML special characters for Telegram HTML parse mode
+func escapeHTML(s string) string {
+	s = strings.ReplaceAll(s, "&", "&amp;")
+	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, ">", "&gt;")
+	return s
 }
