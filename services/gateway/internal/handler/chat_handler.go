@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
 	"github.com/kexi/telegram-bot-gateway/internal/repository"
 	"github.com/kexi/telegram-bot-gateway/internal/service"
@@ -18,16 +17,16 @@ type ChatHandler struct {
 	chatService    *service.ChatService
 	messageService *service.MessageService
 	chatRepo       repository.ChatRepository
-	botRepo        repository.BotRepository
+	botService     *service.BotService
 }
 
 // NewChatHandler creates a new chat handler
-func NewChatHandler(chatService *service.ChatService, messageService *service.MessageService, chatRepo repository.ChatRepository, botRepo repository.BotRepository) *ChatHandler {
+func NewChatHandler(chatService *service.ChatService, messageService *service.MessageService, chatRepo repository.ChatRepository, botService *service.BotService) *ChatHandler {
 	return &ChatHandler{
 		chatService:    chatService,
 		messageService: messageService,
 		chatRepo:       chatRepo,
-		botRepo:        botRepo,
+		botService:     botService,
 	}
 }
 
@@ -152,31 +151,8 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 		return
 	}
 
-	// Get the bot's token
-	bot, err := h.botRepo.GetByID(c.Request.Context(), chat.BotID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve bot"})
-		return
-	}
-
-	// Create Telegram Bot API client
-	botAPI, err := tgbotapi.NewBotAPI(bot.Token)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize bot API"})
-		return
-	}
-
-	// Prepare message config
-	msg := tgbotapi.NewMessage(telegramChatID, req.Text)
-	if req.ParseMode != "" {
-		msg.ParseMode = req.ParseMode
-	}
-	if req.ReplyToMessageID != nil {
-		msg.ReplyToMessageID = int(*req.ReplyToMessageID)
-	}
-
-	// Send message via Telegram Bot API
-	sentMsg, err := botAPI.Send(msg)
+	// Send message via BotService (handles token decryption internally)
+	err = h.botService.SendTelegramMessage(c.Request.Context(), chat.BotID, telegramChatID, req.Text, req.ReplyToMessageID, req.ParseMode)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"ok":          false,
@@ -187,11 +163,10 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 
 	// Return Telegram Bot API-compatible response
 	c.JSON(http.StatusOK, gin.H{
-		"ok":         true,
-		"message_id": sentMsg.MessageID,
-		"chat_id":    telegramChatID,
-		"text":       req.Text,
-		"sent_at":    time.Now(),
+		"ok":      true,
+		"chat_id": telegramChatID,
+		"text":    req.Text,
+		"sent_at": time.Now(),
 	})
 }
 
