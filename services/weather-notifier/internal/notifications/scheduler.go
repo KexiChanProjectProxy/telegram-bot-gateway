@@ -26,8 +26,8 @@ func NewScheduler(cfg *config.Config, handlers []*ChatHandler, logger zerolog.Lo
 		return nil, fmt.Errorf("invalid timezone %s: %w", cfg.Schedule.Timezone, err)
 	}
 
-	// Create cron instance with timezone
-	c := cron.New(cron.WithLocation(location))
+	// Create cron instance with timezone and seconds support
+	c := cron.New(cron.WithLocation(location), cron.WithSeconds())
 
 	scheduler := &Scheduler{
 		cron:     c,
