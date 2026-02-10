@@ -139,9 +139,10 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 	}
 
 	// TODO: Integrate with Telegram Bot API to actually send the message
-	// For now, just acknowledge
+	// For now, just acknowledge with Telegram Bot API-compatible response
 	c.JSON(http.StatusOK, gin.H{
-		"message":    "Message queued for delivery",
+		"ok":         true,
+		"message_id": time.Now().Unix(), // Temporary placeholder
 		"chat_id":    chatID,
 		"text":       req.Text,
 		"queued_at":  time.Now(),
