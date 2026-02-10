@@ -93,7 +93,7 @@ func main() {
 
 	// Initialize business services
 	authService := service.NewAuthService(userRepo, refreshTokenRepo, jwtService)
-	botService := service.NewBotService(botRepo, cfg.Auth.JWT.Secret)
+	botService := service.NewBotService(botRepo, cfg.Auth.JWT.Secret, cfg.Telegram.WebhookBaseURL)
 	chatService := service.NewChatService(chatRepo, botRepo)
 	messageService := service.NewMessageService(messageRepo, chatRepo)
 	// apiKeySvc removed - API key management moved to CLI tool
@@ -149,13 +149,11 @@ func main() {
 		protected.Use(middleware.AuthMiddleware(jwtService, apiKeyService, apiKeyRepo))
 		protected.Use(middleware.PerUserRateLimitMiddleware(rateLimiter))
 		{
-			// Bot management
+			// Bot management - READ-ONLY (write operations: ./bin/bot)
 			bots := protected.Group("/bots")
 			{
-				bots.POST("", botHandler.CreateBot)
 				bots.GET("", botHandler.ListBots)
 				bots.GET("/:id", botHandler.GetBot)
-				bots.DELETE("/:id", botHandler.DeleteBot)
 			}
 
 			// Chat management
@@ -199,8 +197,8 @@ func main() {
 			protected.GET("/ws", wsHandler.HandleWebSocket)
 		}
 
-		// Telegram webhook receiver (no auth - validated by bot token in URL)
-		v1.POST("/telegram/webhook/:bot_username", telegramHandler.ReceiveUpdate)
+		// Telegram webhook receiver (no auth - validated by webhook secret)
+		v1.POST("/telegram/webhook/:webhook_secret", telegramHandler.ReceiveUpdate)
 	}
 
 	// Create context for background workers

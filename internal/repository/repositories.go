@@ -90,6 +90,7 @@ type BotRepository interface {
 	GetByID(ctx context.Context, id uint) (*domain.Bot, error)
 	GetByUsername(ctx context.Context, username string) (*domain.Bot, error)
 	GetByToken(ctx context.Context, token string) (*domain.Bot, error)
+	GetByWebhookSecret(ctx context.Context, secret string) (*domain.Bot, error)
 	List(ctx context.Context, offset, limit int) ([]domain.Bot, error)
 	Update(ctx context.Context, bot *domain.Bot) error
 	Delete(ctx context.Context, id uint) error
@@ -129,6 +130,15 @@ func (r *botRepository) GetByUsername(ctx context.Context, username string) (*do
 func (r *botRepository) GetByToken(ctx context.Context, token string) (*domain.Bot, error) {
 	var bot domain.Bot
 	err := r.db.WithContext(ctx).Where("token = ?", token).First(&bot).Error
+	if err != nil {
+		return nil, err
+	}
+	return &bot, nil
+}
+
+func (r *botRepository) GetByWebhookSecret(ctx context.Context, secret string) (*domain.Bot, error) {
+	var bot domain.Bot
+	err := r.db.WithContext(ctx).Where("webhook_secret = ? AND is_active = true", secret).First(&bot).Error
 	if err != nil {
 		return nil, err
 	}

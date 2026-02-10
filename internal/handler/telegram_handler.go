@@ -132,14 +132,14 @@ type Sticker struct {
 // @Tags telegram
 // @Accept json
 // @Produce json
-// @Param bot_username path string true "Bot username"
+// @Param webhook_secret path string true "Webhook secret"
 // @Param update body TelegramUpdate true "Telegram update"
 // @Success 200 {object} SuccessResponse
-// @Router /telegram/webhook/{bot_username} [post]
+// @Router /telegram/webhook/{webhook_secret} [post]
 func (h *TelegramHandler) ReceiveUpdate(c *gin.Context) {
-	botUsername := c.Param("bot_username")
-	if botUsername == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Bot username is required"})
+	webhookSecret := c.Param("webhook_secret")
+	if webhookSecret == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Webhook secret is required"})
 		return
 	}
 
@@ -149,8 +149,8 @@ func (h *TelegramHandler) ReceiveUpdate(c *gin.Context) {
 		return
 	}
 
-	// Get bot from database
-	bot, err := h.botService.GetBot(c.Request.Context(), 0) // TODO: Get by username
+	// Get bot from database by webhook secret
+	bot, err := h.botService.GetBotByWebhookSecret(c.Request.Context(), webhookSecret)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Bot not found"})
 		return

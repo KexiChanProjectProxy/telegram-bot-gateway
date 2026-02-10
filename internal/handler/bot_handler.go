@@ -9,7 +9,7 @@ import (
 	"github.com/kexi/telegram-bot-gateway/internal/service"
 )
 
-// BotHandler handles bot endpoints
+// BotHandler handles bot endpoints (READ-ONLY - use ./bin/bot CLI for write operations)
 type BotHandler struct {
 	botService *service.BotService
 }
@@ -19,32 +19,6 @@ func NewBotHandler(botService *service.BotService) *BotHandler {
 	return &BotHandler{
 		botService: botService,
 	}
-}
-
-// CreateBot handles bot registration
-// @Summary Register bot
-// @Description Register a new Telegram bot
-// @Tags bots
-// @Accept json
-// @Produce json
-// @Param request body service.CreateBotRequest true "Bot details"
-// @Success 201 {object} service.BotDTO
-// @Failure 400 {object} ErrorResponse
-// @Router /api/v1/bots [post]
-func (h *BotHandler) CreateBot(c *gin.Context) {
-	var req service.CreateBotRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	bot, err := h.botService.CreateBot(c.Request.Context(), &req)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusCreated, bot)
 }
 
 // ListBots handles listing bots
@@ -93,27 +67,4 @@ func (h *BotHandler) GetBot(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, bot)
-}
-
-// DeleteBot handles deleting a bot
-// @Summary Delete bot
-// @Description Delete a bot
-// @Tags bots
-// @Param id path int true "Bot ID"
-// @Success 200 {object} SuccessResponse
-// @Failure 400 {object} ErrorResponse
-// @Router /api/v1/bots/{id} [delete]
-func (h *BotHandler) DeleteBot(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid bot ID"})
-		return
-	}
-
-	if err := h.botService.DeleteBot(c.Request.Context(), uint(id)); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Bot deleted successfully"})
 }

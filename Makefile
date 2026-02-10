@@ -9,6 +9,10 @@ help: ## Show this help message
 build: ## Build the application
 	@echo "Building..."
 	@go build -o bin/gateway cmd/gateway/main.go
+	@go build -o bin/bot cmd/bot/main.go
+	@go build -o bin/apikey cmd/apikey/main.go
+	@go build -o bin/createuser cmd/createuser/main.go
+	@echo "✓ All binaries built successfully"
 
 run: ## Run the application
 	@echo "Running..."

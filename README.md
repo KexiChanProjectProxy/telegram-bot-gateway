@@ -44,8 +44,10 @@ The Telegram Bot Gateway is a unified interface between Telegram bots and downst
 - ✅ **Webhooks** - HTTP callbacks with circuit breaker and retries
 
 ### 🤖 Bot & Chat Management
-- ✅ Multi-bot registration and management
-- ✅ Encrypted bot token storage
+- ✅ **CLI-only bot management** (enhanced security)
+- ✅ **Automatic webhook registration** with random secret URLs
+- ✅ Multi-bot support
+- ✅ Encrypted bot token storage (AES-256-GCM)
 - ✅ Chat creation and updates
 - ✅ Message storage with full metadata
 - ✅ Cursor-based pagination
@@ -223,18 +225,24 @@ curl -X POST http://localhost:8080/api/v1/auth/login \
 # Response: Displays full API key (save it - shown only once!)
 # API Key: tgw_...
 
-# 3. Register Telegram bot (using API key - Telegram style!)
-curl -X POST "http://localhost:8080/api/v1/bots?api_key=tgw_xxx" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "my_bot",
-    "token": "123456:ABC-DEF...",
-    "display_name": "My Bot"
-  }'
+# 3. Register Telegram bot (CLI-only for security!)
+./bin/bot create \
+  --username my_bot \
+  --token "123456:ABC-DEF..." \
+  --display-name "My Bot"
 
-# 4. Set Telegram webhook
-curl -X POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook" \
-  -d "url=https://your-domain.com/telegram/webhook/<YOUR_BOT_TOKEN>"
+# The CLI automatically:
+# - Generates a random webhook secret
+# - Registers the webhook with Telegram
+# - Stores encrypted bot token
+# - Returns webhook URL
+
+# 4. List and manage bots
+./bin/bot list                           # List all bots
+./bin/bot get 1                          # Get bot details
+./bin/bot show-token 1                   # Show decrypted token
+./bin/bot update 1 --active false        # Disable bot
+./bin/bot delete 1 --force               # Delete bot (also deregisters webhook)
 
 # 5. Get messages (Telegram Bot API style!)
 curl "http://localhost:8080/api/v1/chats/1/messages?token=tgw_xxx&limit=50"
@@ -243,6 +251,28 @@ curl "http://localhost:8080/api/v1/chats/1/messages?token=tgw_xxx&limit=50"
 curl -X POST http://localhost:8080/api/v1/chats/1/messages \
   -d "token=tgw_xxx" \
   -d "text=Hello from the gateway!"
+```
+
+### Bot Management Security
+
+**Why CLI-only bot management?**
+- ✅ Bot tokens grant **full control** over your Telegram bot
+- ✅ CLI requires **server access** (privilege separation)
+- ✅ **No network exposure** of bot tokens
+- ✅ Automatic **webhook registration** with random secret URLs
+- ✅ Prevents token sniffing attacks
+
+**Web API is READ-ONLY:**
+```bash
+# ✅ Allowed: List bots (no token exposure)
+curl "http://localhost:8080/api/v1/bots?api_key=tgw_xxx"
+
+# ✅ Allowed: Get bot info (no token exposure)
+curl "http://localhost:8080/api/v1/bots/1?api_key=tgw_xxx"
+
+# ❌ Blocked: Create/delete bots (use CLI)
+# POST /api/v1/bots → 404 Not Found
+# DELETE /api/v1/bots/1 → 404 Not Found
 ```
 
 ### Python Example

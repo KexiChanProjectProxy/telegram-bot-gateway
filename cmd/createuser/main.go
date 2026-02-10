@@ -43,9 +43,9 @@ func main() {
 	jwtService := jwt.NewService(
 		cfg.Auth.JWT.Secret,
 		cfg.Auth.JWT.Issuer,
-		cfg.Auth.JWT.AccessTokenTTL,
-		cfg.Auth.JWT.RefreshTokenTTL,
-		cfg.Auth.JWT.RefreshThreshold,
+		cfg.Auth.JWT.AccessTokenTTL.Duration(),
+		cfg.Auth.JWT.RefreshTokenTTL.Duration(),
+		cfg.Auth.JWT.RefreshThreshold.Duration(),
 	)
 
 	authService := service.NewAuthService(userRepo, refreshTokenRepo, jwtService)

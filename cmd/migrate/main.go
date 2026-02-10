@@ -38,8 +38,19 @@ func main() {
 
 	switch command {
 	case "up":
-		if err := runMigration(db, "migrations/001_initial_schema.sql"); err != nil {
-			log.Fatalf("Migration failed: %v", err)
+		migrations := []string{
+			"migrations/001_initial_schema.sql",
+			"migrations/003_bot_webhook_secret.sql",
+		}
+		for _, migration := range migrations {
+			if _, err := os.Stat(migration); os.IsNotExist(err) {
+				log.Printf("Skipping non-existent migration: %s", migration)
+				continue
+			}
+			log.Printf("Running migration: %s", migration)
+			if err := runMigration(db, migration); err != nil {
+				log.Fatalf("Migration failed: %v", err)
+			}
 		}
 		log.Println("Migration completed successfully")
 	case "down":

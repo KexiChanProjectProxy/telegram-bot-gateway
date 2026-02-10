@@ -48,15 +48,16 @@ type Permission struct {
 
 // Bot represents a registered Telegram bot
 type Bot struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	Username    string    `gorm:"uniqueIndex;not null;size:100" json:"username"`
-	Token       string    `gorm:"uniqueIndex;not null;size:255" json:"-"` // Encrypted
-	DisplayName string    `gorm:"size:255" json:"display_name,omitempty"`
-	Description string    `gorm:"type:text" json:"description,omitempty"`
-	IsActive    bool      `gorm:"default:true" json:"is_active"`
-	WebhookURL  string    `gorm:"size:512" json:"webhook_url,omitempty"` // Set when registered with Telegram
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID            uint      `gorm:"primaryKey" json:"id"`
+	Username      string    `gorm:"uniqueIndex;not null;size:100" json:"username"`
+	Token         string    `gorm:"uniqueIndex;not null;size:255" json:"-"` // Encrypted
+	DisplayName   string    `gorm:"size:255" json:"display_name,omitempty"`
+	Description   string    `gorm:"type:text" json:"description,omitempty"`
+	IsActive      bool      `gorm:"default:true" json:"is_active"`
+	WebhookURL    string    `gorm:"size:512" json:"webhook_url,omitempty"`    // Set when registered with Telegram
+	WebhookSecret string    `gorm:"uniqueIndex;size:64" json:"-"`              // Random secret for webhook URL
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 
 	// Relationships
 	Chats []Chat `gorm:"foreignKey:BotID" json:"-"`
