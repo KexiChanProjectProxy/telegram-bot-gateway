@@ -85,7 +85,7 @@ func CreateAPIKey(args []string) {
 	defer cancel()
 
 	apiKey := &domain.APIKey{
-		Key:         plainKey[:16], // Store prefix for identification
+		Key:         plainKey, // Store full key for lookup
 		HashedKey:   hashedKey,
 		Name:        name,
 		Description: description,
