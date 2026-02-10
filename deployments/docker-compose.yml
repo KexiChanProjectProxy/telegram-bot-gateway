@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-rootpass}
+      MYSQL_DATABASE: telegram_gateway
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  gateway:
+    build:
+      context: ../services/gateway
+      dockerfile: ../../deployments/gateway/Dockerfile
+    ports:
+      - "8080:8080"
+      - "50051:50051"
+    environment:
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=${DB_PASSWORD:-rootpass}
+      - DB_NAME=telegram_gateway
+      - REDIS_ADDR=redis:6379
+      - JWT_SECRET=${JWT_SECRET}
+      - TELEGRAM_WEBHOOK_BASE_URL=${TELEGRAM_WEBHOOK_BASE_URL}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  weather-notifier:
+    build:
+      context: ../services/weather-notifier
+      dockerfile: ../../deployments/weather-notifier/Dockerfile
+    environment:
+      - WNB_TELEGRAM_BOT_TOKEN=${WEATHER_BOT_TOKEN}
+      - WNB_TELEGRAM_PASSWORD=${WEATHER_BOT_PASSWORD}
+      - WNB_TELEGRAM_API_URL=http://gateway:8080
+      - WNB_CAIYUN_API_TOKEN=${CAIYUN_API_TOKEN}
+      - WNB_LLM_API_KEY=${LLM_API_KEY}
+      - WNB_LLM_BASE_URL=${LLM_BASE_URL:-https://api.openai.com/v1}
+      - WNB_LLM_MODEL=${LLM_MODEL:-gpt-4}
+    depends_on:
+      - gateway
+    restart: unless-stopped
+    volumes:
+      - weather_data:/app/data
+
+volumes:
+  mysql_data:
+  redis_data:
+  weather_data:

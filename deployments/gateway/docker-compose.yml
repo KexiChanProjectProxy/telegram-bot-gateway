@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: tgw-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: telegram_gateway
+      MYSQL_USER: gateway
+      MYSQL_PASSWORD: gateway123
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-ppassword"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: tgw-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tgw-gateway
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DB_PASSWORD: gateway123
+      REDIS_PASSWORD: ""
+      JWT_SECRET: "your-secret-key-min-32-characters-long-change-me-in-production"
+      WEBHOOK_BASE_URL: "https://your-domain.com"
+    ports:
+      - "8080:8080"  # HTTP
+      - "9090:9090"  # gRPC
+    volumes:
+      - ./configs:/app/configs
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  redis_data:

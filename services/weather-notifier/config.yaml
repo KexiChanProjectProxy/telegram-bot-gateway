@@ -1,0 +1,64 @@
+# Weather Notifier Service Configuration
+
+# Location settings
+location:
+  longitude: 116.3883  # Beijing longitude (example)
+  latitude: 39.9289    # Beijing latitude (example)
+  name: "Beijing"      # Location name for display
+
+# Caiyun Weather API configuration
+caiyun:
+  api_token: ""        # Set via CAIYUN_API_TOKEN env var or fill here
+  api_url: "https://api.caiyunapp.com/v2.6"
+
+# LLM configuration
+llm:
+  provider: "openai"   # Currently supports: openai
+  api_key: ""          # Set via LLM_API_KEY env var or fill here
+  model: "gpt-4"       # Model to use for weather analysis
+  api_url: "https://api.openai.com/v1"
+  temperature: 0.7
+  max_tokens: 500
+
+# Telegram configuration
+telegram:
+  bot_token: ""        # Telegram bot token
+  chat_id: ""          # Target chat ID for notifications
+  password: ""         # Set via TELEGRAM_PASSWORD env var or fill here
+  api_url: "https://api.telegram.org"
+
+# Schedule configuration (cron format)
+schedule:
+  morning: "0 7 * * *"    # 7:00 AM daily
+  evening: "0 18 * * *"   # 6:00 PM daily
+
+# Detector configuration
+detector:
+  enabled: true
+  check_interval: "30m"   # Check every 30 minutes
+  thresholds:
+    temperature_change: 5.0      # Celsius
+    precipitation_probability: 0.3  # 30%
+    wind_speed: 10.0             # m/s
+    aqi_unhealthy: 150           # AQI threshold
+
+# Notification configuration
+notifications:
+  enabled: true
+  deduplicate_window: "1h"  # Don't send duplicate alerts within 1 hour
+  quiet_hours:
+    enabled: true
+    start: "22:00"
+    end: "07:00"
+
+# Logging configuration
+logging:
+  level: "info"          # debug, info, warn, error
+  format: "json"         # json or console
+  output: "stdout"       # stdout or file path
+
+# Storage configuration
+storage:
+  state_file: "./data/state.json"
+  backup_enabled: true
+  backup_interval: "24h"

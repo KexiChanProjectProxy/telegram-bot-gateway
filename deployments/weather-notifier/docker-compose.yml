@@ -1,0 +1,96 @@
+version: '3.8'
+
+services:
+  weather-notifier:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: weather-notice-bot
+    restart: unless-stopped
+
+    # Environment variables (override config.yaml values)
+    # Prefer using .env file for sensitive data
+    environment:
+      # Telegram Configuration
+      - WNB_TELEGRAM_BOT_TOKEN=${WNB_TELEGRAM_BOT_TOKEN}
+      - WNB_TELEGRAM_PASSWORD=${WNB_TELEGRAM_PASSWORD}
+      - WNB_TELEGRAM_ADMIN_USER_ID=${WNB_TELEGRAM_ADMIN_USER_ID}
+
+      # Caiyun Weather API Configuration
+      - WNB_CAIYUN_API_TOKEN=${WNB_CAIYUN_API_TOKEN}
+      - WNB_CAIYUN_LATITUDE=${WNB_CAIYUN_LATITUDE:-39.9042}
+      - WNB_CAIYUN_LONGITUDE=${WNB_CAIYUN_LONGITUDE:-116.4074}
+      - WNB_CAIYUN_TIMEOUT=${WNB_CAIYUN_TIMEOUT:-30}
+
+      # LLM Configuration
+      - WNB_LLM_PROVIDER=${WNB_LLM_PROVIDER:-openai}
+      - WNB_LLM_API_KEY=${WNB_LLM_API_KEY}
+      - WNB_LLM_MODEL=${WNB_LLM_MODEL:-gpt-4}
+      - WNB_LLM_BASE_URL=${WNB_LLM_BASE_URL}
+      - WNB_LLM_TIMEOUT=${WNB_LLM_TIMEOUT:-60}
+
+      # Schedule Configuration
+      - WNB_SCHEDULE_CHECK_WEATHER_CRON=${WNB_SCHEDULE_CHECK_WEATHER_CRON:-0 7,12,18 * * *}
+      - WNB_SCHEDULE_TIMEZONE=${WNB_SCHEDULE_TIMEZONE:-Asia/Shanghai}
+
+      # Detection Thresholds
+      - WNB_DETECTION_RAIN_PROBABILITY_THRESHOLD=${WNB_DETECTION_RAIN_PROBABILITY_THRESHOLD:-0.3}
+      - WNB_DETECTION_TEMPERATURE_HIGH_THRESHOLD=${WNB_DETECTION_TEMPERATURE_HIGH_THRESHOLD:-35.0}
+      - WNB_DETECTION_TEMPERATURE_LOW_THRESHOLD=${WNB_DETECTION_TEMPERATURE_LOW_THRESHOLD:-0.0}
+      - WNB_DETECTION_AQI_THRESHOLD=${WNB_DETECTION_AQI_THRESHOLD:-150}
+
+      # Logging Configuration
+      - WNB_LOGGING_LEVEL=${WNB_LOGGING_LEVEL:-info}
+      - WNB_LOGGING_PRETTY_PRINT=${WNB_LOGGING_PRETTY_PRINT:-false}
+
+    # Volume mounts
+    volumes:
+      # Mount custom config file (optional - env vars take precedence)
+      - ./config.yaml:/app/config.yaml:ro
+
+      # Mount data directory for persistent state
+      - ./data:/app/data
+
+      # Mount timezone data (ensures correct scheduling)
+      - /etc/localtime:/etc/localtime:ro
+
+    # Network configuration
+    networks:
+      - weather-bot-network
+
+    # Resource limits (adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "weather-notice-bot"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+# Network definition
+networks:
+  weather-bot-network:
+    driver: bridge
+    name: weather-bot-network
+
+# Volume definitions (optional - for named volumes instead of bind mounts)
+volumes:
+  weather-data:
+    driver: local
+    name: weather-notice-bot-data
