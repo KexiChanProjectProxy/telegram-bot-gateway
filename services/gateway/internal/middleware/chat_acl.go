@@ -22,7 +22,7 @@ const (
 )
 
 // ChatACLMiddleware checks granular chat-level permissions
-func ChatACLMiddleware(permission string, chatPermRepo repository.ChatPermissionRepository, redisClient *redis.Client) gin.HandlerFunc {
+func ChatACLMiddleware(permission string, chatPermRepo repository.ChatPermissionRepository, chatRepo repository.ChatRepository, redisClient *redis.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get auth context
 		authCtx, exists := GetAuthContext(c)
@@ -32,7 +32,7 @@ func ChatACLMiddleware(permission string, chatPermRepo repository.ChatPermission
 			return
 		}
 
-		// Get chat ID from URL parameter
+		// Get chat ID from URL parameter (this is the internal database ID)
 		chatIDStr := c.Param("id")
 		if chatIDStr == "" {
 			chatIDStr = c.Param("chat_id")
@@ -50,8 +50,19 @@ func ChatACLMiddleware(permission string, chatPermRepo repository.ChatPermission
 			return
 		}
 
-		// Check permission (with Redis caching)
-		allowed, err := checkChatPermission(c.Request.Context(), authCtx, uint(chatID), permission, chatPermRepo, redisClient)
+		// Look up the chat to verify it exists and get its internal database ID
+		// The URL parameter could be either internal ID or Telegram ID - try both
+		chat, err := chatRepo.GetByID(c.Request.Context(), uint(chatID))
+		if err != nil {
+			// If not found by ID, it might be a Telegram ID - we need to know the bot
+			// For now, return not found - in production, you'd need bot context
+			c.JSON(http.StatusNotFound, gin.H{"error": "Chat not found"})
+			c.Abort()
+			return
+		}
+
+		// Check permission using the internal database chat ID
+		allowed, err := checkChatPermission(c.Request.Context(), authCtx, chat.ID, permission, chatPermRepo, redisClient)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check permissions"})
 			c.Abort()

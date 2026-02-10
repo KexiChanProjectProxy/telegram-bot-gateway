@@ -164,11 +164,11 @@ func main() {
 
 				// Message endpoints with ACL
 				chats.GET("/:id/messages",
-					middleware.ChatACLMiddleware(middleware.PermissionRead, chatPermRepo, redisClient),
+					middleware.ChatACLMiddleware(middleware.PermissionRead, chatPermRepo, chatRepo, redisClient),
 					chatHandler.GetMessages,
 				)
 				chats.POST("/:id/messages",
-					middleware.ChatACLMiddleware(middleware.PermissionSend, chatPermRepo, redisClient),
+					middleware.ChatACLMiddleware(middleware.PermissionSend, chatPermRepo, chatRepo, redisClient),
 					chatHandler.SendMessage,
 				)
 			}
