@@ -22,7 +22,6 @@ type Client struct {
 
 // SendMessageRequest represents the message send request payload
 type SendMessageRequest struct {
-	ChatID    int64  `json:"chat_id"`
 	Text      string `json:"text"`
 	ParseMode string `json:"parse_mode,omitempty"`
 }
@@ -50,7 +49,6 @@ func NewClient(apiKey, apiURL string, logger zerolog.Logger) *Client {
 func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, parseMode string) error {
 	// Prepare request body
 	reqBody := SendMessageRequest{
-		ChatID:    chatID,
 		Text:      text,
 		ParseMode: parseMode,
 	}
@@ -60,8 +58,8 @@ func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, par
 		return fmt.Errorf("failed to marshal send message request: %w", err)
 	}
 
-	// Create HTTP request
-	url := fmt.Sprintf("%s/api/v1/messages/send", c.apiURL)
+	// Create HTTP request - use chat-specific endpoint
+	url := fmt.Sprintf("%s/api/v1/chats/%d/messages", c.apiURL, chatID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(jsonData))
 	if err != nil {
 		return fmt.Errorf("failed to create send message request: %w", err)

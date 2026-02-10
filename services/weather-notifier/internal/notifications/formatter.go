@@ -166,14 +166,14 @@ func formatHourlyForecast(hourly []weather.ValuePoint, skycon []weather.SkyconPo
 	now := time.Now()
 	for i := 0; i < len(hourly) && i < 24; i += 3 {
 		hour := hourly[i]
-		if hour.Datetime.After(now) {
+		if hour.Datetime.Time.After(now) {
 			skyconStr := "🌡️"
 			if i < len(skycon) {
 				skyconStr = skycon[i].Value.Emoji()
 			}
 
 			message += fmt.Sprintf("%s %s %.1f°C\n",
-				hour.Datetime.Format("15:04"),
+				hour.Datetime.Time.Format("15:04"),
 				skyconStr,
 				hour.Value,
 			)

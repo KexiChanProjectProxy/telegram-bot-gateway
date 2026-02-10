@@ -1,6 +1,56 @@
 package weather
 
-import "time"
+import (
+	"encoding/json"
+	"strings"
+	"time"
+)
+
+// CaiyunTime is a custom time type that handles Caiyun API's flexible datetime format
+type CaiyunTime struct {
+	time.Time
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling for CaiyunTime
+// Handles both "2006-01-02T15:04:05Z07:00" and "2006-01-02T15:04Z07:00" formats
+func (ct *CaiyunTime) UnmarshalJSON(b []byte) error {
+	s := strings.Trim(string(b), "\"")
+	if s == "null" {
+		ct.Time = time.Time{}
+		return nil
+	}
+
+	// Try parsing with seconds first (RFC3339)
+	t, err := time.Parse(time.RFC3339, s)
+	if err == nil {
+		ct.Time = t
+		return nil
+	}
+
+	// Try parsing without seconds: "2006-01-02T15:04Z07:00"
+	t, err = time.Parse("2006-01-02T15:04Z07:00", s)
+	if err == nil {
+		ct.Time = t
+		return nil
+	}
+
+	// Try parsing without timezone: "2006-01-02T15:04:05"
+	t, err = time.Parse("2006-01-02T15:04:05", s)
+	if err == nil {
+		ct.Time = t
+		return nil
+	}
+
+	return err
+}
+
+// MarshalJSON implements custom JSON marshaling for CaiyunTime
+func (ct CaiyunTime) MarshalJSON() ([]byte, error) {
+	if ct.Time.IsZero() {
+		return []byte("null"), nil
+	}
+	return json.Marshal(ct.Time.Format(time.RFC3339))
+}
 
 // RealtimeWeather represents the current weather conditions
 type RealtimeWeather struct {
@@ -26,8 +76,8 @@ type AQI struct {
 
 // HourlyForecast represents hourly weather forecast
 type HourlyForecast struct {
-	Datetime    time.Time `json:"datetime"`
-	Temperature float64   `json:"temperature"`
+	Datetime    CaiyunTime `json:"datetime"`
+	Temperature float64    `json:"temperature"`
 	Skycon      Skycon    `json:"skycon"`
 	Humidity    float64   `json:"humidity"`
 	Wind        Wind      `json:"wind"`
@@ -99,21 +149,21 @@ type DailyResult struct {
 
 // ValuePoint represents a time-series data point with a single value
 type ValuePoint struct {
-	Datetime time.Time `json:"datetime"`
-	Value    float64   `json:"value"`
+	Datetime CaiyunTime `json:"datetime"`
+	Value    float64    `json:"value"`
 }
 
 // SkyconPoint represents a time-series skycon data point
 type SkyconPoint struct {
-	Datetime time.Time `json:"datetime"`
-	Value    Skycon    `json:"value"`
+	Datetime CaiyunTime `json:"datetime"`
+	Value    Skycon     `json:"value"`
 }
 
 // WindPoint represents a time-series wind data point
 type WindPoint struct {
-	Datetime  time.Time `json:"datetime"`
-	Speed     float64   `json:"speed"`
-	Direction float64   `json:"direction"`
+	Datetime  CaiyunTime `json:"datetime"`
+	Speed     float64    `json:"speed"`
+	Direction float64    `json:"direction"`
 }
 
 // DailySkyconPoint represents daily skycon forecast
