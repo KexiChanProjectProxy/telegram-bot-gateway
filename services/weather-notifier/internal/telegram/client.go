@@ -14,10 +14,10 @@ import (
 
 // Client is the Telegram Bot Gateway client
 type Client struct {
-	tokenManager *TokenManager
-	apiURL       string
-	httpClient   *http.Client
-	logger       zerolog.Logger
+	apiKey     string
+	apiURL     string
+	httpClient *http.Client
+	logger     zerolog.Logger
 }
 
 // SendMessageRequest represents the message send request payload
@@ -34,13 +34,11 @@ type SendMessageResponse struct {
 	MessageID   int64  `json:"message_id,omitempty"`
 }
 
-// NewClient creates a new Telegram Gateway client
-func NewClient(botToken, password, apiURL string, logger zerolog.Logger) *Client {
-	tokenManager := NewTokenManager(botToken, password, apiURL, logger)
-
+// NewClient creates a new Telegram Gateway client with API key authentication
+func NewClient(apiKey, apiURL string, logger zerolog.Logger) *Client {
 	return &Client{
-		tokenManager: tokenManager,
-		apiURL:       apiURL,
+		apiKey: apiKey,
+		apiURL: apiURL,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -48,14 +46,8 @@ func NewClient(botToken, password, apiURL string, logger zerolog.Logger) *Client
 	}
 }
 
-// SendMessage sends a message to the specified chat
+// SendMessage sends a message to the specified chat using API key authentication
 func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, parseMode string) error {
-	// Get valid access token
-	accessToken, err := c.tokenManager.GetAccessToken(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get access token: %w", err)
-	}
-
 	// Prepare request body
 	reqBody := SendMessageRequest{
 		ChatID:    chatID,
@@ -76,7 +68,7 @@ func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, par
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
+	req.Header.Set("X-API-Key", c.apiKey)
 
 	// Execute request
 	resp, err := c.httpClient.Do(req)

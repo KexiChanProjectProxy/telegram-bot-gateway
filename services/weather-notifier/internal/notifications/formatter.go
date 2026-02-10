@@ -8,7 +8,7 @@ import (
 )
 
 // FormatMorningMessage formats the morning weather notification with HTML
-func FormatMorningMessage(w *weather.WeatherResponse, advice string) string {
+func FormatMorningMessage(locationName string, w *weather.WeatherResponse, advice string) string {
 	realtime := w.Result.Realtime
 	daily := w.Result.Daily
 
@@ -20,11 +20,13 @@ func FormatMorningMessage(w *weather.WeatherResponse, advice string) string {
 
 	// Format message with HTML
 	message := fmt.Sprintf(
-		"🌅 <b>早安！今日天气预报</b>\n\n"+
+		"🌅 <b>早安！今日天气预报</b>\n"+
+			"📍 <b>%s</b>\n\n"+
 			"%s <b>%s</b>\n"+
 			"🌡️ 温度：%.1f°C (今日 %.1f°C ~ %.1f°C)\n"+
 			"💧 湿度：%.0f%%\n"+
 			"💨 风速：%.1f m/s\n",
+		locationName,
 		realtime.Skycon.Emoji(),
 		realtime.Skycon.Chinese(),
 		realtime.Temperature,
@@ -51,7 +53,7 @@ func FormatMorningMessage(w *weather.WeatherResponse, advice string) string {
 }
 
 // FormatEveningMessage formats the evening weather notification with HTML
-func FormatEveningMessage(w *weather.WeatherResponse, advice string) string {
+func FormatEveningMessage(locationName string, w *weather.WeatherResponse, advice string) string {
 	realtime := w.Result.Realtime
 	daily := w.Result.Daily
 
@@ -67,7 +69,8 @@ func FormatEveningMessage(w *weather.WeatherResponse, advice string) string {
 
 	// Format message with HTML
 	message := fmt.Sprintf(
-		"🌙 <b>晚安！今晚天气及明日预报</b>\n\n"+
+		"🌙 <b>晚安！今晚天气及明日预报</b>\n"+
+			"📍 <b>%s</b>\n\n"+
 			"<b>今晚</b>\n"+
 			"%s <b>%s</b>\n"+
 			"🌡️ 温度：%.1f°C\n"+
@@ -75,6 +78,7 @@ func FormatEveningMessage(w *weather.WeatherResponse, advice string) string {
 			"<b>明日预报</b>\n"+
 			"%s <b>%s</b>\n"+
 			"🌡️ 温度：%.1f°C ~ %.1f°C\n",
+		locationName,
 		realtime.Skycon.Emoji(),
 		realtime.Skycon.Chinese(),
 		realtime.Temperature,
@@ -94,18 +98,20 @@ func FormatEveningMessage(w *weather.WeatherResponse, advice string) string {
 }
 
 // FormatChangeAlert formats a weather change alert with HTML
-func FormatChangeAlert(changes string, w *weather.WeatherResponse, advice string) string {
+func FormatChangeAlert(locationName string, changes string, w *weather.WeatherResponse, advice string) string {
 	realtime := w.Result.Realtime
 
 	// Format message with HTML
 	message := fmt.Sprintf(
-		"⚠️ <b>天气变化提醒</b>\n\n"+
+		"⚠️ <b>天气变化提醒</b>\n"+
+			"📍 <b>%s</b>\n\n"+
 			"<b>检测到显著变化：</b>\n%s\n\n"+
 			"<b>当前天气</b>\n"+
 			"%s <b>%s</b>\n"+
 			"🌡️ 温度：%.1f°C\n"+
 			"💧 湿度：%.0f%%\n"+
 			"💨 风速：%.1f m/s\n",
+		locationName,
 		changes,
 		realtime.Skycon.Emoji(),
 		realtime.Skycon.Chinese(),

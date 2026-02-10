@@ -107,6 +107,28 @@ func formatChanges(changes []detector.WeatherChange) string {
 }
 
 // GetStateFilePath returns the absolute path for the weather state file
-func GetStateFilePath(dataDir string) string {
-	return filepath.Join(dataDir, "weather_state.json")
+// Now supports per-chat, per-location state files
+func GetStateFilePath(dataDir string, chatID int64, locationName string) string {
+	sanitized := sanitizeLocationName(locationName)
+	filename := fmt.Sprintf("weather_state_%d_%s.json", chatID, sanitized)
+	return filepath.Join(dataDir, filename)
+}
+
+// sanitizeLocationName removes or replaces characters unsafe for filenames
+func sanitizeLocationName(name string) string {
+	// Use the same logic as config.SanitizeFileName for consistency
+	// Replace spaces and special characters with underscores
+	sanitized := strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
+			return r
+		}
+		return '_'
+	}, name)
+	// Remove leading/trailing underscores
+	sanitized = strings.Trim(sanitized, "_")
+	// Ensure non-empty result
+	if sanitized == "" {
+		sanitized = "unnamed"
+	}
+	return sanitized
 }

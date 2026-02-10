@@ -3,7 +3,6 @@ package app
 import (
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/user/weather-notice-bot/internal/config"
 	"github.com/user/weather-notice-bot/internal/detector"
@@ -22,9 +21,7 @@ type App struct {
 	logger         *utils.Logger
 	weatherClient  *weather.Client
 	telegramClient *telegram.Client
-	llmClient      *llm.Client
-	detector       *DetectorAdapter
-	handlers       *notifications.NotificationHandlers
+	chatHandlers   []*notifications.ChatHandler
 	scheduler      *notifications.Scheduler
 }
 
@@ -50,52 +47,74 @@ func New(cfg *config.Config) (*App, error) {
 
 	// Initialize Telegram client
 	telegramClient := telegram.NewClient(
-		cfg.Telegram.BotToken,
-		cfg.Telegram.Password,
+		cfg.Telegram.APIKey,
 		cfg.Telegram.APIURL,
 		logger.Logger,
 	)
 	logger.Info().Msg("telegram client initialized")
 
-	// Initialize LLM client
-	llmClient := llm.NewClient(
-		cfg.LLM.BaseURL,
-		cfg.LLM.APIKey,
-		cfg.LLM.Model,
-	)
-	logger.Info().Msg("llm client initialized")
-
-	// Initialize detector with adapter
+	// Initialize chat handlers for each configured chat
+	var chatHandlers []*notifications.ChatHandler
 	thresholds := detector.DefaultThresholds()
-	stateFile := GetStateFilePath(dataDir)
-	detectorAdapter := NewDetectorAdapter(thresholds, stateFile, logger.Logger)
-	logger.Info().Str("state_file", stateFile).Msg("detector initialized")
 
-	// Determine the chat ID to send notifications to
-	// If admin_user_id is set, use it; otherwise use the first allowed ID
-	chatID := cfg.Telegram.AdminUserID
-	if chatID == 0 && len(cfg.Telegram.AllowedIDs) > 0 {
-		chatID = cfg.Telegram.AllowedIDs[0]
-		logger.Info().Int64("chat_id", chatID).Msg("using first allowed ID as chat ID")
-	} else if chatID == 0 {
-		return nil, fmt.Errorf("no chat ID configured: set either telegram.admin_user_id or telegram.allowed_ids")
+	for _, chatCfg := range cfg.Chats {
+		// Resolve LLM config for this chat (global + per-chat overrides)
+		llmConfig := chatCfg.ResolveLLM(cfg.LLM)
+
+		// Create LLM client for this chat
+		chatLLMClient := llm.NewClient(
+			llmConfig.BaseURL,
+			llmConfig.APIKey,
+			llmConfig.Model,
+			llmConfig.MaxTokens,
+			llmConfig.Temperature,
+		)
+
+		// Initialize locations for this chat
+		var locations []notifications.LocationContext
+		for _, locCfg := range chatCfg.Locations {
+			// Create per-location state file path
+			stateFile := GetStateFilePath(dataDir, chatCfg.ChatID, locCfg.Name)
+
+			// Create detector for this location
+			detectorAdapter := NewDetectorAdapter(thresholds, stateFile, logger.Logger)
+
+			locations = append(locations, notifications.LocationContext{
+				Name:      locCfg.Name,
+				Latitude:  locCfg.Latitude,
+				Longitude: locCfg.Longitude,
+				Detector:  detectorAdapter,
+			})
+
+			logger.Info().
+				Int64("chat_id", chatCfg.ChatID).
+				Str("location", locCfg.Name).
+				Str("state_file", stateFile).
+				Msg("location initialized")
+		}
+
+		// Create chat handler
+		chatHandler := notifications.NewChatHandler(
+			weatherClient,
+			telegramClient,
+			chatLLMClient,
+			chatCfg.ChatID,
+			chatCfg.Name,
+			locations,
+			logger.Logger,
+		)
+		chatHandlers = append(chatHandlers, chatHandler)
+
+		logger.Info().
+			Int64("chat_id", chatCfg.ChatID).
+			Str("chat_name", chatCfg.Name).
+			Int("locations", len(locations)).
+			Str("llm_model", llmConfig.Model).
+			Msg("chat handler initialized")
 	}
 
-	// Initialize notification handlers
-	handlers := notifications.NewNotificationHandlers(
-		weatherClient,
-		telegramClient,
-		llmClient,
-		detectorAdapter,
-		chatID,
-		cfg.Caiyun.Latitude,
-		cfg.Caiyun.Longitude,
-		logger.Logger,
-	)
-	logger.Info().Msg("notification handlers initialized")
-
 	// Initialize scheduler
-	scheduler, err := notifications.NewScheduler(cfg, handlers, logger.Logger)
+	scheduler, err := notifications.NewScheduler(cfg, chatHandlers, logger.Logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize scheduler: %w", err)
 	}
@@ -106,9 +125,7 @@ func New(cfg *config.Config) (*App, error) {
 		logger:         logger,
 		weatherClient:  weatherClient,
 		telegramClient: telegramClient,
-		llmClient:      llmClient,
-		detector:       detectorAdapter,
-		handlers:       handlers,
+		chatHandlers:   chatHandlers,
 		scheduler:      scheduler,
 	}, nil
 }
@@ -120,7 +137,9 @@ func (a *App) Start() error {
 	// Start the scheduler
 	a.scheduler.Start()
 
-	a.logger.Info().Msg("weather notification bot started successfully")
+	a.logger.Info().
+		Int("chats", len(a.chatHandlers)).
+		Msg("weather notification bot started successfully")
 	return nil
 }
 
@@ -132,9 +151,6 @@ func (a *App) Stop() {
 	if a.scheduler != nil {
 		a.scheduler.Stop()
 	}
-
-	// Give a moment for any pending operations to complete
-	time.Sleep(1 * time.Second)
 
 	a.logger.Info().Msg("weather notification bot stopped")
 }

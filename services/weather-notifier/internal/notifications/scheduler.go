@@ -13,12 +13,12 @@ import (
 // Scheduler manages scheduled weather notifications
 type Scheduler struct {
 	cron     *cron.Cron
-	handlers *NotificationHandlers
+	handlers []*ChatHandler
 	logger   zerolog.Logger
 }
 
 // NewScheduler creates a new notification scheduler with configured cron jobs
-func NewScheduler(cfg *config.Config, handlers *NotificationHandlers, logger zerolog.Logger) (*Scheduler, error) {
+func NewScheduler(cfg *config.Config, handlers []*ChatHandler, logger zerolog.Logger) (*Scheduler, error) {
 	// Load timezone
 	location, err := time.LoadLocation(cfg.Schedule.Timezone)
 	if err != nil {
@@ -34,33 +34,39 @@ func NewScheduler(cfg *config.Config, handlers *NotificationHandlers, logger zer
 		logger:   logger.With().Str("component", "scheduler").Logger(),
 	}
 
-	// Add morning notification job (8:00 AM)
-	_, err = c.AddFunc("0 8 * * *", func() {
+	// Add morning notification job
+	_, err = c.AddFunc(cfg.Schedule.MorningCron, func() {
 		scheduler.logger.Info().Msg("triggering morning notification")
-		if err := handlers.HandleMorningNotification(); err != nil {
-			scheduler.logger.Error().Err(err).Msg("morning notification failed")
+		for _, handler := range handlers {
+			if err := handler.HandleMorningNotification(); err != nil {
+				scheduler.logger.Error().Err(err).Int64("chat_id", handler.chatID).Msg("morning notification failed")
+			}
 		}
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to add morning notification job: %w", err)
 	}
 
-	// Add evening notification job (11:30 PM)
-	_, err = c.AddFunc("30 23 * * *", func() {
+	// Add evening notification job
+	_, err = c.AddFunc(cfg.Schedule.EveningCron, func() {
 		scheduler.logger.Info().Msg("triggering evening notification")
-		if err := handlers.HandleEveningNotification(); err != nil {
-			scheduler.logger.Error().Err(err).Msg("evening notification failed")
+		for _, handler := range handlers {
+			if err := handler.HandleEveningNotification(); err != nil {
+				scheduler.logger.Error().Err(err).Int64("chat_id", handler.chatID).Msg("evening notification failed")
+			}
 		}
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to add evening notification job: %w", err)
 	}
 
-	// Add weather polling job (every 15 minutes)
-	_, err = c.AddFunc("*/15 * * * *", func() {
+	// Add weather polling job
+	_, err = c.AddFunc(cfg.Schedule.PollCron, func() {
 		scheduler.logger.Debug().Msg("triggering weather poll")
-		if err := handlers.HandleWeatherPoll(); err != nil {
-			scheduler.logger.Error().Err(err).Msg("weather poll failed")
+		for _, handler := range handlers {
+			if err := handler.HandleWeatherPoll(); err != nil {
+				scheduler.logger.Error().Err(err).Int64("chat_id", handler.chatID).Msg("weather poll failed")
+			}
 		}
 	})
 	if err != nil {
@@ -69,7 +75,11 @@ func NewScheduler(cfg *config.Config, handlers *NotificationHandlers, logger zer
 
 	scheduler.logger.Info().
 		Str("timezone", cfg.Schedule.Timezone).
-		Msg("scheduler configured with 3 jobs: morning (8:00), evening (23:30), poll (*/15)")
+		Str("morning_cron", cfg.Schedule.MorningCron).
+		Str("evening_cron", cfg.Schedule.EveningCron).
+		Str("poll_cron", cfg.Schedule.PollCron).
+		Int("chat_handlers", len(handlers)).
+		Msg("scheduler configured with 3 jobs")
 
 	return scheduler, nil
 }

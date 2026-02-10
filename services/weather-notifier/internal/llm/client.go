@@ -21,13 +21,13 @@ type Client struct {
 }
 
 // NewClient creates a new LLM client
-func NewClient(baseURL, apiKey, model string) *Client {
+func NewClient(baseURL, apiKey, model string, maxTokens int, temperature float64) *Client {
 	return &Client{
 		baseURL:     baseURL,
 		apiKey:      apiKey,
 		model:       model,
-		maxTokens:   500, // Default max tokens for weather advice
-		temperature: 0.7, // Balanced creativity and consistency
+		maxTokens:   maxTokens,
+		temperature: temperature,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},

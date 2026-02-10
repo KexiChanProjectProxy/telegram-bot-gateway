@@ -29,7 +29,7 @@ var (
 
 func main() {
 	// Parse command-line flags
-	configPath := flag.String("config", "", "path to configuration file (default: config.yaml in current directory)")
+	configPath := flag.String("config", "", "path to configuration file (default: config.json in current directory)")
 	version := flag.Bool("version", false, "print version information and exit")
 	flag.Parse()
 
