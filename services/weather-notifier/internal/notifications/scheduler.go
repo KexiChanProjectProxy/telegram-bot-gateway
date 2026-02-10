@@ -144,31 +144,32 @@ func timeStringToCron(timeStr string) (string, error) {
 }
 
 // durationToCron converts a duration string to cron expression for polling
-// Examples: "15m" -> "*/15 * * * *", "1h" -> "0 * * * *"
+// Examples: "15m" -> "0 */15 * * * *", "1h" -> "0 0 * * * *"
 func durationToCron(durationStr string) (string, error) {
 	d, err := time.ParseDuration(durationStr)
 	if err != nil {
 		return "", fmt.Errorf("invalid duration format: %w", err)
 	}
 
-	// Convert duration to appropriate cron expression
+	// Convert duration to appropriate cron expression (with seconds field)
 	minutes := int(d.Minutes())
 	if minutes < 1 {
 		return "", fmt.Errorf("poll interval must be at least 1 minute")
 	}
 
 	if minutes < 60 {
-		// Every N minutes
-		return fmt.Sprintf("*/%d * * * *", minutes), nil
+		// Every N minutes: "0 */N * * * *"
+		return fmt.Sprintf("0 */%d * * * *", minutes), nil
 	}
 
 	// For hourly or longer intervals
 	hours := int(d.Hours())
 	if hours < 24 {
-		return fmt.Sprintf("0 */%d * * *", hours), nil
+		// Every N hours: "0 0 */N * * *"
+		return fmt.Sprintf("0 0 */%d * * *", hours), nil
 	}
 
-	// For daily intervals
+	// For daily intervals: "0 0 0 */N * *"
 	days := hours / 24
-	return fmt.Sprintf("0 0 */%d * *", days), nil
+	return fmt.Sprintf("0 0 0 */%d * *", days), nil
 }
