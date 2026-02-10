@@ -32,7 +32,7 @@ func ChatACLMiddleware(permission string, chatPermRepo repository.ChatPermission
 			return
 		}
 
-		// Get chat ID from URL parameter (this is the internal database ID)
+		// Get chat ID from URL parameter (Telegram chat ID)
 		chatIDStr := c.Param("id")
 		if chatIDStr == "" {
 			chatIDStr = c.Param("chat_id")
@@ -43,19 +43,16 @@ func ChatACLMiddleware(permission string, chatPermRepo repository.ChatPermission
 			return
 		}
 
-		chatID, err := strconv.ParseUint(chatIDStr, 10, 64)
+		telegramChatID, err := strconv.ParseInt(chatIDStr, 10, 64)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chat ID"})
 			c.Abort()
 			return
 		}
 
-		// Look up the chat to verify it exists and get its internal database ID
-		// The URL parameter could be either internal ID or Telegram ID - try both
-		chat, err := chatRepo.GetByID(c.Request.Context(), uint(chatID))
+		// Look up the chat by Telegram ID to get internal database ID
+		chat, err := chatRepo.GetByTelegramID(c.Request.Context(), telegramChatID)
 		if err != nil {
-			// If not found by ID, it might be a Telegram ID - we need to know the bot
-			// For now, return not found - in production, you'd need bot context
 			c.JSON(http.StatusNotFound, gin.H{"error": "Chat not found"})
 			c.Abort()
 			return

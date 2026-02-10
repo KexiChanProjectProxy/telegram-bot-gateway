@@ -164,6 +164,7 @@ type ChatRepository interface {
 	Create(ctx context.Context, chat *domain.Chat) error
 	GetByID(ctx context.Context, id uint) (*domain.Chat, error)
 	GetByBotAndTelegramID(ctx context.Context, botID uint, telegramID int64) (*domain.Chat, error)
+	GetByTelegramID(ctx context.Context, telegramID int64) (*domain.Chat, error)
 	List(ctx context.Context, offset, limit int) ([]domain.Chat, error)
 	ListByBot(ctx context.Context, botID uint, offset, limit int) ([]domain.Chat, error)
 	Update(ctx context.Context, chat *domain.Chat) error
@@ -196,6 +197,17 @@ func (r *chatRepository) GetByBotAndTelegramID(ctx context.Context, botID uint, 
 	var chat domain.Chat
 	err := r.db.WithContext(ctx).
 		Where("bot_id = ? AND telegram_id = ?", botID, telegramID).
+		First(&chat).Error
+	if err != nil {
+		return nil, err
+	}
+	return &chat, nil
+}
+
+func (r *chatRepository) GetByTelegramID(ctx context.Context, telegramID int64) (*domain.Chat, error) {
+	var chat domain.Chat
+	err := r.db.WithContext(ctx).
+		Where("telegram_id = ?", telegramID).
 		First(&chat).Error
 	if err != nil {
 		return nil, err
