@@ -15,9 +15,10 @@ type Scheduler struct {
 	cron     *cron.Cron
 	handlers []*ChatHandler
 	logger   zerolog.Logger
+	location *time.Location
 }
 
-// NewScheduler creates a new notification scheduler with configured cron jobs
+// NewScheduler creates a new notification scheduler with time-based schedules
 func NewScheduler(cfg *config.Config, handlers []*ChatHandler, logger zerolog.Logger) (*Scheduler, error) {
 	// Load timezone
 	location, err := time.LoadLocation(cfg.Schedule.Timezone)
@@ -25,17 +26,22 @@ func NewScheduler(cfg *config.Config, handlers []*ChatHandler, logger zerolog.Lo
 		return nil, fmt.Errorf("invalid timezone %s: %w", cfg.Schedule.Timezone, err)
 	}
 
-	// Create cron instance with timezone (without verbose logger to avoid interface issues)
+	// Create cron instance with timezone
 	c := cron.New(cron.WithLocation(location))
 
 	scheduler := &Scheduler{
 		cron:     c,
 		handlers: handlers,
+		location: location,
 		logger:   logger.With().Str("component", "scheduler").Logger(),
 	}
 
-	// Add morning notification job
-	_, err = c.AddFunc(cfg.Schedule.MorningCron, func() {
+	// Parse and add morning notification job
+	morningCron, err := timeStringToCron(cfg.Schedule.MorningTime)
+	if err != nil {
+		return nil, fmt.Errorf("invalid morning_time format: %w", err)
+	}
+	_, err = c.AddFunc(morningCron, func() {
 		scheduler.logger.Info().Msg("triggering morning notification")
 		for _, handler := range handlers {
 			if err := handler.HandleMorningNotification(); err != nil {
@@ -47,8 +53,12 @@ func NewScheduler(cfg *config.Config, handlers []*ChatHandler, logger zerolog.Lo
 		return nil, fmt.Errorf("failed to add morning notification job: %w", err)
 	}
 
-	// Add evening notification job
-	_, err = c.AddFunc(cfg.Schedule.EveningCron, func() {
+	// Parse and add evening notification job
+	eveningCron, err := timeStringToCron(cfg.Schedule.EveningTime)
+	if err != nil {
+		return nil, fmt.Errorf("invalid evening_time format: %w", err)
+	}
+	_, err = c.AddFunc(eveningCron, func() {
 		scheduler.logger.Info().Msg("triggering evening notification")
 		for _, handler := range handlers {
 			if err := handler.HandleEveningNotification(); err != nil {
@@ -60,8 +70,12 @@ func NewScheduler(cfg *config.Config, handlers []*ChatHandler, logger zerolog.Lo
 		return nil, fmt.Errorf("failed to add evening notification job: %w", err)
 	}
 
-	// Add weather polling job
-	_, err = c.AddFunc(cfg.Schedule.PollCron, func() {
+	// Parse and add weather polling job
+	pollCron, err := durationToCron(cfg.Schedule.PollInterval)
+	if err != nil {
+		return nil, fmt.Errorf("invalid poll_interval format: %w", err)
+	}
+	_, err = c.AddFunc(pollCron, func() {
 		scheduler.logger.Debug().Msg("triggering weather poll")
 		for _, handler := range handlers {
 			if err := handler.HandleWeatherPoll(); err != nil {
@@ -75,18 +89,27 @@ func NewScheduler(cfg *config.Config, handlers []*ChatHandler, logger zerolog.Lo
 
 	scheduler.logger.Info().
 		Str("timezone", cfg.Schedule.Timezone).
-		Str("morning_cron", cfg.Schedule.MorningCron).
-		Str("evening_cron", cfg.Schedule.EveningCron).
-		Str("poll_cron", cfg.Schedule.PollCron).
+		Str("morning_time", cfg.Schedule.MorningTime).
+		Str("evening_time", cfg.Schedule.EveningTime).
+		Str("poll_interval", cfg.Schedule.PollInterval).
 		Int("chat_handlers", len(handlers)).
 		Msg("scheduler configured with 3 jobs")
 
 	return scheduler, nil
 }
 
-// Start begins the scheduled job execution
+// Start begins the scheduled job execution and sends initial weather updates
 func (s *Scheduler) Start() {
 	s.logger.Info().Msg("starting scheduler")
+
+	// Send initial weather update to all chats on startup
+	s.logger.Info().Msg("sending initial weather update on startup")
+	for _, handler := range s.handlers {
+		if err := handler.HandleMorningNotification(); err != nil {
+			s.logger.Error().Err(err).Int64("chat_id", handler.chatID).Msg("startup weather notification failed")
+		}
+	}
+
 	s.cron.Start()
 }
 
@@ -101,4 +124,51 @@ func (s *Scheduler) Stop() {
 // GetCron returns the underlying cron instance for testing or advanced usage
 func (s *Scheduler) GetCron() *cron.Cron {
 	return s.cron
+}
+
+// timeStringToCron converts a time string (HH:MM:SS) to cron expression
+// Examples: "08:00:00" -> "0 0 8 * * *", "23:30:00" -> "0 30 23 * * *"
+func timeStringToCron(timeStr string) (string, error) {
+	// Parse time in format HH:MM:SS
+	t, err := time.Parse("15:04:05", timeStr)
+	if err != nil {
+		// Try HH:MM format
+		t, err = time.Parse("15:04", timeStr)
+		if err != nil {
+			return "", fmt.Errorf("time must be in HH:MM:SS or HH:MM format: %w", err)
+		}
+	}
+
+	// Convert to cron format: "second minute hour * * *"
+	return fmt.Sprintf("%d %d %d * * *", t.Second(), t.Minute(), t.Hour()), nil
+}
+
+// durationToCron converts a duration string to cron expression for polling
+// Examples: "15m" -> "*/15 * * * *", "1h" -> "0 * * * *"
+func durationToCron(durationStr string) (string, error) {
+	d, err := time.ParseDuration(durationStr)
+	if err != nil {
+		return "", fmt.Errorf("invalid duration format: %w", err)
+	}
+
+	// Convert duration to appropriate cron expression
+	minutes := int(d.Minutes())
+	if minutes < 1 {
+		return "", fmt.Errorf("poll interval must be at least 1 minute")
+	}
+
+	if minutes < 60 {
+		// Every N minutes
+		return fmt.Sprintf("*/%d * * * *", minutes), nil
+	}
+
+	// For hourly or longer intervals
+	hours := int(d.Hours())
+	if hours < 24 {
+		return fmt.Sprintf("0 */%d * * *", hours), nil
+	}
+
+	// For daily intervals
+	days := hours / 24
+	return fmt.Sprintf("0 0 */%d * *", days), nil
 }

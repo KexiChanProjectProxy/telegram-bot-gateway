@@ -20,9 +20,9 @@ func TestLoad(t *testing.T) {
   },
   "schedule": {
     "timezone": "Asia/Shanghai",
-    "morning_cron": "0 8 * * *",
-    "evening_cron": "30 23 * * *",
-    "poll_cron": "*/15 * * * *"
+    "morning_time": "08:00:00",
+    "evening_time": "23:30:00",
+    "poll_interval": "15m"
   },
   "detection": {
     "temperature_delta": 3.0,
@@ -296,9 +296,9 @@ func TestValidation(t *testing.T) {
 					Model:  "gpt-4",
 				},
 				Schedule: ScheduleConfig{
-					MorningCron: "0 8 * * *",
-					EveningCron: "30 23 * * *",
-					PollCron:    "*/15 * * * *",
+					MorningTime:  "08:00:00",
+					EveningTime:  "23:30:00",
+					PollInterval: "15m",
 				},
 				Logging: LoggingConfig{
 					Level: "info",

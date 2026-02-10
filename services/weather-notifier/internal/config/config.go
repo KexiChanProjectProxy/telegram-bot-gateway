@@ -45,9 +45,9 @@ type LLMConfig struct {
 // ScheduleConfig holds scheduling configuration
 type ScheduleConfig struct {
 	Timezone     string `json:"timezone"`      // e.g., "Asia/Shanghai"
-	MorningCron  string `json:"morning_cron"`  // e.g., "0 8 * * *"
-	EveningCron  string `json:"evening_cron"`  // e.g., "30 23 * * *"
-	PollCron     string `json:"poll_cron"`     // e.g., "*/15 * * * *"
+	MorningTime  string `json:"morning_time"`  // e.g., "08:00:00" (HH:MM:SS format)
+	EveningTime  string `json:"evening_time"`  // e.g., "23:30:00" (HH:MM:SS format)
+	PollInterval string `json:"poll_interval"` // e.g., "15m" (duration format)
 }
 
 // DetectionConfig holds weather detection thresholds
@@ -185,14 +185,14 @@ func setDefaults(cfg *Config) {
 	if cfg.Schedule.Timezone == "" {
 		cfg.Schedule.Timezone = "Asia/Shanghai"
 	}
-	if cfg.Schedule.MorningCron == "" {
-		cfg.Schedule.MorningCron = "0 8 * * *"
+	if cfg.Schedule.MorningTime == "" {
+		cfg.Schedule.MorningTime = "08:00:00"
 	}
-	if cfg.Schedule.EveningCron == "" {
-		cfg.Schedule.EveningCron = "30 23 * * *"
+	if cfg.Schedule.EveningTime == "" {
+		cfg.Schedule.EveningTime = "23:30:00"
 	}
-	if cfg.Schedule.PollCron == "" {
-		cfg.Schedule.PollCron = "*/15 * * * *"
+	if cfg.Schedule.PollInterval == "" {
+		cfg.Schedule.PollInterval = "15m"
 	}
 
 	// Detection defaults
@@ -240,14 +240,14 @@ func validate(cfg *Config) error {
 	}
 
 	// Validate Schedule config
-	if cfg.Schedule.MorningCron == "" {
-		return fmt.Errorf("schedule.morning_cron is required")
+	if cfg.Schedule.MorningTime == "" {
+		return fmt.Errorf("schedule.morning_time is required")
 	}
-	if cfg.Schedule.EveningCron == "" {
-		return fmt.Errorf("schedule.evening_cron is required")
+	if cfg.Schedule.EveningTime == "" {
+		return fmt.Errorf("schedule.evening_time is required")
 	}
-	if cfg.Schedule.PollCron == "" {
-		return fmt.Errorf("schedule.poll_cron is required")
+	if cfg.Schedule.PollInterval == "" {
+		return fmt.Errorf("schedule.poll_interval is required")
 	}
 
 	// Validate Logging config

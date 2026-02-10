@@ -98,15 +98,20 @@ llm:
    - Old: `bot_token` + `password` (attempting user login - INCORRECT)
    - New: `api_key` (using service authentication - CORRECT)
 2. **Locations moved from global to per-chat**: Each chat can have multiple locations
-2. **New required fields**:
+3. **Schedule configuration changed**:
+   - Old: Cron expressions (`morning_cron`, `evening_cron`, `poll_cron`)
+   - New: Time-of-day format (`morning_time`, `evening_time`) + duration (`poll_interval`)
+   - More intuitive: "08:00:00" instead of "0 8 * * *"
+4. **Startup behavior**: Now sends initial weather update immediately on startup
+5. **New required fields**:
    - `telegram.api_key` (replaces bot_token + password)
    - `chats` array (at least one chat required)
    - `chat_id` and `locations` for each chat
-   - `schedule.morning_cron`, `schedule.evening_cron`, `schedule.poll_cron` (explicit cron expressions)
-3. **LLM configuration**:
+   - `schedule.morning_time`, `schedule.evening_time`, `schedule.poll_interval` (new time format)
+6. **LLM configuration**:
    - Added `max_tokens` and `temperature` to global LLM config
    - Per-chat overrides supported via optional `llm` object
-4. **Detection thresholds**: Changed from `rain_probability_threshold` / `temperature_high_threshold` / etc. to delta-based thresholds
+7. **Detection thresholds**: Changed from `rain_probability_threshold` / `temperature_high_threshold` / etc. to delta-based thresholds
    - `temperature_delta`, `wind_speed_delta`, `visibility_delta`, `aqi_cn_delta`, `aqi_usa_delta`
 
 ### State Files
@@ -173,13 +178,41 @@ export TELEGRAM_API_URL="http://localhost:8080"
 
 **Important**: If you need a literal `$` in a value, use `$$` (standard `os.ExpandEnv` behavior).
 
-### 3. Update Cron Schedules
+### 3. Update Schedule Configuration (New Format!)
 
-The old `schedule.check_weather_cron` has been split into three separate schedules:
+**Old cron-based format:**
+```yaml
+schedule:
+  timezone: "Asia/Shanghai"
+  check_weather_cron: "0 7,12,18 * * *"
+```
 
-- `schedule.morning_cron`: Morning notification (default: `0 8 * * *`)
-- `schedule.evening_cron`: Evening notification (default: `30 23 * * *`)
-- `schedule.poll_cron`: Weather change polling (default: `*/15 * * * *`)
+**New time-based format:**
+```json
+{
+  "schedule": {
+    "timezone": "Asia/Shanghai",
+    "morning_time": "08:00:00",
+    "evening_time": "23:30:00",
+    "poll_interval": "15m"
+  }
+}
+```
+
+**Time Format:**
+- `morning_time` / `evening_time`: Use `HH:MM:SS` or `HH:MM` format (24-hour)
+- `poll_interval`: Use Go duration format: `15m`, `1h`, `30m`, etc.
+
+**Examples:**
+- `"08:00:00"` = 8:00 AM
+- `"23:30:00"` = 11:30 PM
+- `"15m"` = every 15 minutes
+- `"1h"` = every hour
+
+The scheduler now:
+- Uses explicit times instead of cron expressions (easier to understand)
+- Respects the configured timezone for all schedules
+- Sends initial weather update immediately on startup
 
 ### 4. Per-Chat LLM Overrides
 
@@ -190,6 +223,12 @@ You can override LLM settings per chat:
   "llm": {
     "model": "gpt-4",
     "temperature": 0.7
+  },
+  "schedule": {
+    "timezone": "Asia/Shanghai",
+    "morning_time": "08:00:00",
+    "evening_time": "23:30:00",
+    "poll_interval": "15m"
   },
   "chats": [
     {

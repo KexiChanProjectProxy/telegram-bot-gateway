@@ -18,9 +18,9 @@
   },
   "schedule": {
     "timezone": "Asia/Shanghai",
-    "morning_cron": "0 8 * * *",
-    "evening_cron": "30 23 * * *",
-    "poll_cron": "*/15 * * * *"
+    "morning_time": "08:00:00",
+    "evening_time": "23:30:00",
+    "poll_interval": "15m"
   },
   "detection": {
     "temperature_delta": 3.0,
