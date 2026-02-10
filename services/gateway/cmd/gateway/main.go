@@ -102,7 +102,7 @@ func main() {
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(authService)
 	botHandler := handler.NewBotHandler(botService)
-	chatHandler := handler.NewChatHandler(chatService, messageService)
+	chatHandler := handler.NewChatHandler(chatService, messageService, chatRepo, botRepo)
 	// apiKeyHandler removed - API key management moved to CLI tool
 	webhookHandler := handler.NewWebhookHandler(webhookService)
 	telegramHandler := handler.NewTelegramHandler(botService, chatService, messageService, messageBroker)
