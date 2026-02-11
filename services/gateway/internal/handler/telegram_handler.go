@@ -62,6 +62,24 @@ type TelegramMessage struct {
 	Audio    *Audio       `json:"audio,omitempty"`
 	Voice    *Voice       `json:"voice,omitempty"`
 	Sticker  *Sticker     `json:"sticker,omitempty"`
+	Animation *Animation  `json:"animation,omitempty"`
+	VideoNote *VideoNote  `json:"video_note,omitempty"`
+
+	// Location and venue
+	Location *Location    `json:"location,omitempty"`
+	Venue    *Venue       `json:"venue,omitempty"`
+
+	// Contact
+	Contact  *Contact     `json:"contact,omitempty"`
+
+	// Poll and dice
+	Poll     *Poll        `json:"poll,omitempty"`
+	Dice     *Dice        `json:"dice,omitempty"`
+
+	// Message metadata
+	Caption  string       `json:"caption,omitempty"`
+	Entities []MessageEntity `json:"entities,omitempty"`
+	CaptionEntities []MessageEntity `json:"caption_entities,omitempty"`
 }
 
 // TelegramUser represents a Telegram user
@@ -125,6 +143,82 @@ type Sticker struct {
 	FileID string `json:"file_id"`
 	Width  int    `json:"width"`
 	Height int    `json:"height"`
+}
+
+type Animation struct {
+	FileID   string `json:"file_id"`
+	Width    int    `json:"width"`
+	Height   int    `json:"height"`
+	Duration int    `json:"duration"`
+	FileName string `json:"file_name,omitempty"`
+}
+
+type VideoNote struct {
+	FileID   string `json:"file_id"`
+	Length   int    `json:"length"`
+	Duration int    `json:"duration"`
+}
+
+// Location represents a point on the map
+type Location struct {
+	Longitude            float64 `json:"longitude"`
+	Latitude             float64 `json:"latitude"`
+	HorizontalAccuracy   float64 `json:"horizontal_accuracy,omitempty"`
+	LivePeriod           int     `json:"live_period,omitempty"`
+	Heading              int     `json:"heading,omitempty"`
+	ProximityAlertRadius int     `json:"proximity_alert_radius,omitempty"`
+}
+
+// Venue represents a venue
+type Venue struct {
+	Location        *Location `json:"location"`
+	Title           string    `json:"title"`
+	Address         string    `json:"address"`
+	FoursquareID    string    `json:"foursquare_id,omitempty"`
+	FoursquareType  string    `json:"foursquare_type,omitempty"`
+	GooglePlaceID   string    `json:"google_place_id,omitempty"`
+	GooglePlaceType string    `json:"google_place_type,omitempty"`
+}
+
+// Contact represents a phone contact
+type Contact struct {
+	PhoneNumber string `json:"phone_number"`
+	FirstName   string `json:"first_name"`
+	LastName    string `json:"last_name,omitempty"`
+	UserID      int64  `json:"user_id,omitempty"`
+	VCard       string `json:"vcard,omitempty"`
+}
+
+// Poll represents a native poll
+type Poll struct {
+	ID                    string        `json:"id"`
+	Question              string        `json:"question"`
+	Options               []PollOption  `json:"options"`
+	TotalVoterCount       int           `json:"total_voter_count"`
+	IsClosed              bool          `json:"is_closed"`
+	IsAnonymous           bool          `json:"is_anonymous"`
+	Type                  string        `json:"type"`
+	AllowsMultipleAnswers bool          `json:"allows_multiple_answers"`
+}
+
+type PollOption struct {
+	Text       string `json:"text"`
+	VoterCount int    `json:"voter_count"`
+}
+
+// Dice represents an animated emoji with a random value
+type Dice struct {
+	Emoji string `json:"emoji"`
+	Value int    `json:"value"`
+}
+
+// MessageEntity represents one special entity in a text message
+type MessageEntity struct {
+	Type   string        `json:"type"`
+	Offset int           `json:"offset"`
+	Length int           `json:"length"`
+	URL    string        `json:"url,omitempty"`
+	User   *TelegramUser `json:"user,omitempty"`
 }
 
 // ReceiveUpdate handles incoming Telegram updates
