@@ -328,11 +328,20 @@ func (h *TelegramHandler) handleGatewayCommand(ctx context.Context, botID uint, 
 }
 
 // handleDebugGateway dumps the raw Telegram Update as JSON reply
+// If the command is a reply to a message, it dumps the replied-to message instead
 func (h *TelegramHandler) handleDebugGateway(ctx context.Context, botID uint, update *TelegramUpdate, msg *TelegramMessage) error {
-	// Pretty-print the update as JSON
-	jsonData, err := json.MarshalIndent(update, "", "  ")
+	// If this is a reply to another message, dump that message instead
+	var dataToDump interface{}
+	if msg.ReplyToMessage != nil {
+		dataToDump = msg.ReplyToMessage
+	} else {
+		dataToDump = update
+	}
+
+	// Pretty-print the data as JSON
+	jsonData, err := json.MarshalIndent(dataToDump, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal update: %w", err)
+		return fmt.Errorf("failed to marshal data: %w", err)
 	}
 
 	// Wrap in HTML pre tags for better formatting
