@@ -1,232 +1,427 @@
-# Weather Notice Bot
+# Weather Notifier Service
 
-An intelligent weather notification service that monitors weather conditions and sends personalized alerts via Telegram. The bot uses LLM (Large Language Model) to generate natural, context-aware weather notifications based on real-time data from the Caiyun Weather API.
+An intelligent weather notification service that monitors weather conditions and sends personalized alerts via Telegram. The service uses LLM to generate natural, context-aware weather notifications based on real-time data from the Caiyun Weather API, and integrates with the Telegram Bot Gateway for message delivery.
 
 ## Features
 
-- **Real-time Weather Monitoring**: Fetches current weather conditions and forecasts from Caiyun Weather API
-- **Intelligent Notifications**: Uses LLM to generate natural, personalized weather alerts
-- **Telegram Integration**: Delivers notifications via Telegram with password-protected access
-- **Scheduled Checks**: Configurable cron-based weather monitoring (default: 7 AM, 12 PM, 6 PM)
-- **Weather Change Detection**: Monitors for significant weather changes and sends alerts
-- **Threshold-based Alerts**: Customizable thresholds for rain probability, temperature, and air quality
-- **Secure Authentication**: Password-protected Telegram bot with user ID allowlisting
-- **Flexible Configuration**: YAML-based config with environment variable overrides
-- **Robust Logging**: Structured logging with configurable levels and pretty-print mode
-- **Docker Support**: Easy deployment with Docker and Docker Compose
+- Real-time weather monitoring from Caiyun Weather API
+- LLM-powered natural language notifications
+- Multi-chat support with independent configurations
+- Multi-location monitoring per chat
+- Scheduled weather checks with configurable times
+- Delta-based weather change detection
+- Per-chat LLM configuration overrides
+- API key authentication with the gateway
+- Automatic token refresh
+- Structured logging with configurable levels
+- Docker support for easy deployment
 
 ## Prerequisites
 
-- **Go 1.22** or higher
-- **Caiyun Weather API Token**: Sign up at [Caiyun Weather](https://www.caiyunapp.com/api/) to get an API token
-- **LLM API Access**: OpenAI API key or compatible API endpoint
-- **Telegram Bot Token**: Create a bot via [@BotFather](https://t.me/botfather) on Telegram
-- **Docker** (optional): For containerized deployment
+- Go 1.22 or higher
+- Caiyun Weather API token from https://www.caiyunapp.com/api/
+- LLM API access (OpenAI or compatible endpoint)
+- Running instance of Telegram Bot Gateway
+- API key from the gateway (format: tgw_xxx)
+- Docker (optional, for containerized deployment)
 
-## Installation
+## Quick Start
 
-### Option 1: Build from Source
+### 1. Get an API Key from Gateway
 
-1. Clone the repository:
+Before configuring the service, create an API key in the gateway:
+
+1. Access the gateway web frontend (e.g., http://localhost:8080)
+2. Log in with your user credentials
+3. Navigate to API Keys management
+4. Create a new API key
+5. Copy the generated key (format: tgw_xxx)
+
+### 2. Configure the Service
+
+Copy the example configuration:
+
 ```bash
-git clone https://github.com/user/weather-notice-bot.git
-cd weather-notice-bot
+cp config.json.example config.json
 ```
 
-2. Install dependencies:
-```bash
-go mod download
+Edit config.json with your settings:
+
+```json
+{
+  "telegram": {
+    "api_key": "tgw_1234567890abcdef",
+    "api_url": "http://localhost:8080"
+  },
+  "caiyun": {
+    "api_token": "${CAIYUN_API_TOKEN}"
+  },
+  "llm": {
+    "api_key": "${LLM_API_KEY}",
+    "model": "gpt-4",
+    "max_tokens": 500,
+    "temperature": 0.7
+  },
+  "schedule": {
+    "timezone": "Asia/Shanghai",
+    "morning_time": "08:00:00",
+    "evening_time": "23:30:00",
+    "poll_interval": "15m"
+  },
+  "chats": [
+    {
+      "chat_id": 123456,
+      "name": "Personal",
+      "locations": [
+        {
+          "name": "Home",
+          "latitude": 39.9042,
+          "longitude": 116.4074
+        }
+      ]
+    }
+  ]
+}
 ```
 
-3. Build the binary:
+### 3. Set Environment Variables
+
 ```bash
+export CAIYUN_API_TOKEN="your-caiyun-token"
+export LLM_API_KEY="your-openai-key"
+```
+
+### 4. Build and Run
+
+```bash
+# Build
 make build
+
+# Run
+./bin/weather-notifier --config config.json
 ```
 
-The binary will be created at `bin/weather-notice-bot`.
+Or with Docker Compose:
 
-### Option 2: Docker
-
-See the [Deployment with Docker](#deployment-with-docker) section below.
+```bash
+docker-compose up -d
+```
 
 ## Configuration
 
-The bot can be configured using a YAML configuration file and/or environment variables. Environment variables take precedence over the config file.
+### Telegram Configuration
 
-### Configuration File
+The service uses API key authentication to communicate with the gateway:
 
-Copy the example configuration:
-```bash
-cp config.yaml config.yaml.local
+```json
+{
+  "telegram": {
+    "api_key": "tgw_1234567890abcdef",
+    "api_url": "http://gateway:8080"
+  }
+}
 ```
 
-Edit `config.yaml.local` with your settings:
-
-```yaml
-# Telegram Bot Configuration
-telegram:
-  bot_token: "YOUR_TELEGRAM_BOT_TOKEN"
-  password: "YOUR_SECURE_PASSWORD"
-  admin_user_id: 123456789  # Your Telegram user ID
-  allowed_ids: []           # Optional: List of allowed user IDs
-
-# Caiyun Weather API Configuration
-caiyun:
-  api_token: "YOUR_CAIYUN_API_TOKEN"
-  latitude: 39.9042   # Beijing example
-  longitude: 116.4074
-  timeout: 30         # Request timeout in seconds
-
-# LLM Configuration
-llm:
-  provider: "openai"  # Currently supports: openai
-  api_key: "YOUR_OPENAI_API_KEY"
-  model: "gpt-4"
-  base_url: ""        # Optional: Custom API endpoint
-  timeout: 60         # Request timeout in seconds
-
-# Schedule Configuration (cron format)
-schedule:
-  check_weather_cron: "0 7,12,18 * * *"  # 7 AM, 12 PM, 6 PM daily
-  timezone: "Asia/Shanghai"
-
-# Weather Detection Thresholds
-detection:
-  rain_probability_threshold: 0.3    # 30% or higher triggers alert
-  temperature_high_threshold: 35.0   # Celsius
-  temperature_low_threshold: 0.0     # Celsius
-  aqi_threshold: 150                 # Air Quality Index
-
-# Logging Configuration
-logging:
-  level: "info"         # debug, info, warn, error
-  pretty_print: true    # Enable colored console output
-```
-
-### Environment Variables
-
-All configuration values can be overridden with environment variables prefixed with `WNB_`:
-
-```bash
-# Telegram
-export WNB_TELEGRAM_BOT_TOKEN="your-bot-token"
-export WNB_TELEGRAM_PASSWORD="your-password"
-export WNB_TELEGRAM_ADMIN_USER_ID="123456789"
-
-# Caiyun Weather API
-export WNB_CAIYUN_API_TOKEN="your-caiyun-token"
-export WNB_CAIYUN_LATITUDE="39.9042"
-export WNB_CAIYUN_LONGITUDE="116.4074"
-
-# LLM
-export WNB_LLM_PROVIDER="openai"
-export WNB_LLM_API_KEY="your-openai-key"
-export WNB_LLM_MODEL="gpt-4"
-
-# Schedule
-export WNB_SCHEDULE_CHECK_WEATHER_CRON="0 7,12,18 * * *"
-export WNB_SCHEDULE_TIMEZONE="Asia/Shanghai"
-
-# Detection
-export WNB_DETECTION_RAIN_PROBABILITY_THRESHOLD="0.3"
-export WNB_DETECTION_TEMPERATURE_HIGH_THRESHOLD="35.0"
-export WNB_DETECTION_TEMPERATURE_LOW_THRESHOLD="0.0"
-export WNB_DETECTION_AQI_THRESHOLD="150"
-
-# Logging
-export WNB_LOGGING_LEVEL="info"
-export WNB_LOGGING_PRETTY_PRINT="true"
-```
-
-## Usage
-
-### Running the Bot
-
-#### From Binary
-```bash
-./bin/weather-notice-bot
-```
-
-Or specify a custom config file:
-```bash
-./bin/weather-notice-bot -config /path/to/config.yaml
-```
-
-#### Using Make
-```bash
-make run
-```
-
-### Telegram Commands
-
-Once the bot is running, interact with it via Telegram:
-
-1. **Start the bot**: Send `/start` to your bot
-2. **Authenticate**: Send `/auth <password>` using the password from your config
-3. **Get weather**: Send `/weather` to receive current weather conditions
-4. **Get forecast**: Send `/forecast` to receive upcoming forecast
-5. **Get status**: Send `/status` to check bot status
-6. **Help**: Send `/help` for command list
-
-### Scheduled Notifications
-
-The bot automatically checks weather conditions according to the cron schedule and sends notifications when:
-- Rain probability exceeds the threshold
-- Temperature goes above/below configured thresholds
-- Air Quality Index exceeds the threshold
-- Significant weather changes are detected
-
-## API Integration Details
+- `api_key`: API key from gateway (required, format: tgw_xxx)
+- `api_url`: Gateway base URL (required)
 
 ### Caiyun Weather API
 
-The bot uses Caiyun Weather API v2.6 to fetch:
-- Real-time weather conditions (temperature, humidity, wind, AQI)
-- Hourly forecasts for the next 48 hours
-- Daily forecasts for the next 15 days
+```json
+{
+  "caiyun": {
+    "api_token": "your-token",
+    "timeout": 30
+  }
+}
+```
 
-**API Endpoint**: `https://api.caiyunapp.com/v2.6/{token}/{longitude},{latitude}/weather`
+- `api_token`: Caiyun Weather API token (required)
+- `timeout`: HTTP request timeout in seconds (default: 30)
 
-### LLM Integration
+### LLM Configuration
 
-The bot uses LLM to analyze weather data and generate natural language notifications. Supported providers:
-- **OpenAI**: GPT-4, GPT-3.5-turbo
-- **Compatible APIs**: Any OpenAI-compatible endpoint
+Global LLM settings:
 
-The LLM receives structured weather data and thresholds, then generates:
-- Context-aware weather summaries
-- Personalized recommendations (e.g., "Bring an umbrella", "Dress warmly")
-- Natural language alerts for threshold violations
+```json
+{
+  "llm": {
+    "provider": "openai",
+    "api_key": "your-key",
+    "model": "gpt-4",
+    "base_url": "",
+    "timeout": 60,
+    "max_tokens": 500,
+    "temperature": 0.7
+  }
+}
+```
 
-### Telegram Bot API
+- `provider`: LLM provider (currently supports: openai)
+- `api_key`: API key for the LLM service (required)
+- `model`: Model name (required)
+- `base_url`: Custom API endpoint (optional, for compatible APIs)
+- `timeout`: Request timeout in seconds (default: 60)
+- `max_tokens`: Maximum tokens in response (default: 500)
+- `temperature`: Sampling temperature (default: 0.7)
 
-The bot uses Telegram Bot API to:
-- Receive user commands
-- Send weather notifications
-- Authenticate users via password
-- Manage user sessions
+### Schedule Configuration
+
+The service supports time-based scheduling:
+
+```json
+{
+  "schedule": {
+    "timezone": "Asia/Shanghai",
+    "morning_time": "08:00:00",
+    "evening_time": "23:30:00",
+    "poll_interval": "15m"
+  }
+}
+```
+
+- `timezone`: Timezone for scheduling (required)
+- `morning_time`: Morning report time in HH:MM:SS format (required)
+- `evening_time`: Evening report time in HH:MM:SS format (required)
+- `poll_interval`: Polling interval as Go duration (e.g., 15m, 1h) (required)
+
+On startup, the service sends an initial weather update immediately.
+
+### Chat Configuration
+
+Configure one or more chats to receive weather notifications:
+
+```json
+{
+  "chats": [
+    {
+      "chat_id": 123456,
+      "name": "Alice",
+      "locations": [
+        {
+          "name": "Home",
+          "latitude": 39.9042,
+          "longitude": 116.4074
+        },
+        {
+          "name": "Office",
+          "latitude": 39.9289,
+          "longitude": 116.3883
+        }
+      ],
+      "llm": {
+        "model": "gpt-4o",
+        "temperature": 0.5
+      }
+    }
+  ]
+}
+```
+
+- `chat_id`: Telegram chat ID (required, must be unique)
+- `name`: Descriptive name for the chat (required)
+- `locations`: Array of locations to monitor (required, at least one)
+  - `name`: Location name (required, unique within chat)
+  - `latitude`: Latitude coordinate (required, -90 to 90)
+  - `longitude`: Longitude coordinate (required, -180 to 180)
+- `llm`: Optional LLM overrides for this chat (inherits global settings)
+
+### Detection Thresholds
+
+Configure delta-based thresholds for weather change alerts:
+
+```json
+{
+  "detection": {
+    "temperature_delta": 5.0,
+    "wind_speed_delta": 10.0,
+    "visibility_delta": 2.0,
+    "aqi_cn_delta": 50.0,
+    "aqi_usa_delta": 25.0
+  }
+}
+```
+
+Thresholds trigger alerts when values change by the specified amount since the last check.
+
+### Logging Configuration
+
+```json
+{
+  "logging": {
+    "level": "info",
+    "pretty_print": true
+  }
+}
+```
+
+- `level`: Log level (debug, info, warn, error) (default: info)
+- `pretty_print`: Enable colored console output (default: true)
+
+### Environment Variable Expansion
+
+All configuration values support environment variable substitution using `${VAR_NAME}` syntax:
+
+```json
+{
+  "telegram": {
+    "api_key": "${TELEGRAM_API_KEY}"
+  },
+  "caiyun": {
+    "api_token": "${CAIYUN_API_TOKEN}"
+  }
+}
+```
+
+For literal dollar signs, use `$$`.
+
+## Gateway Integration
+
+### Authentication Flow
+
+The service uses API key authentication with the gateway:
+
+1. API key is included in the Authorization header: `X-API-Key: tgw_xxx`
+2. Gateway validates the API key
+3. Service sends messages via `/api/v1/messages/send` endpoint
+
+No JWT token management is required - API keys provide stateless authentication.
+
+### Required Gateway Permissions
+
+Ensure your API key has the following permissions:
+
+- Message sending access to configured chat IDs
+- If the gateway has chat-level ACL enabled, verify `can_send` permission for target chats
+
+### Deployment Scenarios
+
+#### Local Development
+
+```json
+{
+  "telegram": {
+    "api_url": "http://localhost:8080"
+  }
+}
+```
+
+#### Docker Compose (Same Network)
+
+```yaml
+services:
+  weather-notifier:
+    environment:
+      - TELEGRAM_API_URL=http://gateway:8080
+    networks:
+      - gateway-network
+
+  gateway:
+    networks:
+      - gateway-network
+```
+
+#### Separate Deployments
+
+```json
+{
+  "telegram": {
+    "api_url": "https://gateway.example.com"
+  }
+}
+```
+
+## Docker Deployment
+
+### Using Docker Compose
+
+1. Create a `.env` file with credentials:
+
+```bash
+cp .env.example .env
+# Edit .env with your tokens
+```
+
+2. Start the service:
+
+```bash
+docker-compose up -d
+```
+
+3. View logs:
+
+```bash
+docker-compose logs -f weather-notifier
+```
+
+4. Stop the service:
+
+```bash
+docker-compose down
+```
+
+### Using Docker Directly
+
+1. Build the image:
+
+```bash
+docker build -t weather-notifier:latest .
+```
+
+2. Run the container:
+
+```bash
+docker run -d \
+  --name weather-notifier \
+  -v $(pwd)/config.json:/app/config.json \
+  -v $(pwd)/data:/app/data \
+  -e TELEGRAM_API_KEY="tgw_xxx" \
+  -e CAIYUN_API_TOKEN="your-token" \
+  -e LLM_API_KEY="your-key" \
+  weather-notifier:latest
+```
+
+### Docker Image Details
+
+The Docker setup uses multi-stage builds:
+
+- Build stage: Go 1.22 to compile the binary
+- Runtime stage: Minimal Alpine Linux image
+- Approximate image size: 20MB
+- Health check: Verifies process is running
+
+### Data Persistence
+
+Weather state is stored in per-location files: `weather_state_{chatID}_{locationName}.json`
+
+Examples:
+
+- `weather_state_123456_Home.json`
+- `weather_state_123456_Office.json`
+
+Mount the `./data` directory as a volume to persist state across container restarts.
 
 ## Development
 
 ### Project Structure
 
 ```
-weather-notice-bot/
+services/weather-notifier/
 ├── cmd/
-│   └── weather-notice-bot/
+│   └── weather-notifier/
 │       └── main.go           # Application entry point
 ├── internal/
-│   ├── config/               # Configuration management
+│   ├── config/               # JSON configuration management
 │   ├── utils/                # Logging and utilities
 │   ├── weather/              # Caiyun Weather API client
 │   ├── llm/                  # LLM API client
-│   ├── telegram/             # Telegram bot integration
+│   ├── telegram/             # Gateway API client
 │   ├── detector/             # Weather change detection
 │   ├── notification/         # Notification system
 │   └── app/                  # Application orchestration
 ├── pkg/
 │   └── models/               # Shared types and models
-├── config.yaml               # Example configuration
+├── config.json.example       # Example configuration
 ├── Dockerfile                # Docker build configuration
 ├── docker-compose.yml        # Docker Compose setup
 ├── Makefile                  # Build and development tasks
@@ -272,88 +467,132 @@ make lint
 make security
 ```
 
-## Deployment with Docker
-
-### Using Docker Compose (Recommended)
-
-1. Create a `.env` file with your credentials:
-```bash
-cp .env.example .env
-# Edit .env with your API tokens and passwords
-```
-
-2. Start the service:
-```bash
-docker-compose up -d
-```
-
-3. View logs:
-```bash
-docker-compose logs -f weather-notifier
-```
-
-4. Stop the service:
-```bash
-docker-compose down
-```
-
-### Using Docker Directly
-
-1. Build the image:
-```bash
-docker build -t weather-notice-bot:latest .
-```
-
-2. Run the container:
-```bash
-docker run -d \
-  --name weather-notifier \
-  -v $(pwd)/config.yaml:/app/config.yaml \
-  -v $(pwd)/data:/app/data \
-  -e WNB_TELEGRAM_BOT_TOKEN="your-token" \
-  -e WNB_TELEGRAM_PASSWORD="your-password" \
-  -e WNB_CAIYUN_API_TOKEN="your-token" \
-  -e WNB_LLM_API_KEY="your-key" \
-  weather-notice-bot:latest
-```
-
-### Environment Configuration for Docker
-
-The Docker setup uses a multi-stage build for minimal image size:
-- **Build stage**: Uses Go 1.22 to compile the binary
-- **Runtime stage**: Uses minimal Alpine Linux image
-- **Image size**: Approximately 20MB
-
-Configuration can be provided via:
-1. Volume-mounted `config.yaml` file
-2. Environment variables in `docker-compose.yml` or `.env` file
-3. Command-line environment variables with `docker run`
-
 ## Troubleshooting
 
-### Bot doesn't respond to commands
-- Verify the bot token is correct
-- Check that you've started the bot with `/start`
-- Ensure you're authenticated with `/auth <password>`
-- Check logs for authentication errors
+### Authentication Fails
 
-### Weather data not fetching
-- Verify Caiyun API token is valid
-- Check latitude/longitude are correct
-- Ensure API timeout is sufficient
-- Check logs for API errors
+Error: `API key authentication failed`
 
-### LLM not generating notifications
-- Verify LLM API key is valid
-- Check the model name is correct
-- Ensure base URL is set (if using custom endpoint)
-- Increase timeout if requests are timing out
+Solutions:
 
-### Cron schedule not working
-- Verify cron expression syntax
-- Check timezone setting matches your location
-- Ensure the bot is running continuously
-- Check logs for schedule errors
+1. Verify API key format is correct (tgw_xxx)
+2. Check if API key is active in gateway
+3. Ensure API key has message sending permissions
+4. Verify gateway URL is reachable:
+
+```bash
+curl http://gateway:8080/health
+```
+
+### Message Send Failures
+
+Error: `send message failed with status 403`
+
+Solutions:
+
+1. Chat ACL: API key may not have `can_send` permission
+2. Bot not in chat: Ensure bot is added to the target chat
+3. Chat not registered: Gateway may not know about the chat yet
+
+### Weather Data Not Fetching
+
+Solutions:
+
+1. Verify Caiyun API token is valid
+2. Check latitude/longitude are correct (must be within valid ranges)
+3. Ensure API timeout is sufficient
+4. Check logs for API errors
+
+### LLM Not Generating Notifications
+
+Solutions:
+
+1. Verify LLM API key is valid
+2. Check model name is correct
+3. Ensure base URL is set if using custom endpoint
+4. Increase timeout if requests are timing out
+
+### Schedule Not Working
+
+Solutions:
+
+1. Verify time format is HH:MM:SS (24-hour)
+2. Check timezone setting matches your location
+3. Ensure poll_interval uses valid Go duration format (e.g., 15m, 1h)
+4. Check logs for schedule errors
+
+### Container Health Check Failing
+
+```bash
+# Check container status
+docker ps | grep weather-notifier
+
+# View health check status
+docker inspect --format='{{json .State.Health}}' weather-notifier
+
+# Check logs
+docker-compose logs weather-notifier
+```
+
+## Gateway Compatibility
+
+The weather-notifier service is fully compatible with the Telegram Bot Gateway. It uses:
+
+- API key authentication for stateless, secure access
+- Standard message sending endpoints that remain stable
+- No dependency on user authentication or API key management endpoints
+
+The gateway's CLI-based API key management does not affect the weather service operation. API keys are created once via the web frontend or CLI and then used by the service.
+
+## Configuration Migration
+
+If migrating from an older YAML-based configuration:
+
+### Key Changes
+
+1. Configuration format: YAML to JSON
+2. Authentication: JWT-based user login to API key authentication
+3. Locations: Moved from global to per-chat configuration
+4. Schedule: Cron expressions to time-of-day format
+5. State files: Single file to per-location files
+
+### Migration Steps
+
+1. Create API key in gateway (see Quick Start section)
+2. Copy `config.json.example` to `config.json`
+3. Migrate settings from old `config.yaml`:
+   - Replace `bot_token` and `password` with `api_key`
+   - Move global location to `chats[].locations[]`
+   - Convert cron schedules to time format
+4. Update environment variables if using `${VAR}` syntax
+5. Test the new configuration:
+
+```bash
+./weather-notifier --config config.json
+```
+
+### Schedule Format Conversion
+
+Old cron format:
+
+```yaml
+schedule:
+  check_weather_cron: "0 7,12,18 * * *"
+```
+
+New time format:
+
+```json
+{
+  "schedule": {
+    "morning_time": "07:00:00",
+    "evening_time": "18:00:00",
+    "poll_interval": "5h"
+  }
+}
+```
+
+Old state files (`weather_state.json`) are not automatically migrated. Remove them after verifying the new system works.
 
 ## License
 
@@ -361,20 +600,21 @@ MIT License - see LICENSE file for details
 
 ## Contributing
 
-Contributions are welcome! Please:
-1. Fork the repository
+Contributions are welcome. Please:
+
+1. Fork the repository at https://github.com/KexiChanProjectProxy/telegram-bot-gateway
 2. Create a feature branch
 3. Make your changes with tests
 4. Submit a pull request
 
 ## Support
 
-For issues and questions:
-- GitHub Issues: https://github.com/user/weather-notice-bot/issues
-- Documentation: https://github.com/user/weather-notice-bot/wiki
+For issues and questions, visit the repository:
+
+https://github.com/KexiChanProjectProxy/telegram-bot-gateway
 
 ## Acknowledgments
 
-- [Caiyun Weather API](https://www.caiyunapp.com/api/) for weather data
-- [Telegram Bot API](https://core.telegram.org/bots/api) for messaging platform
-- [OpenAI](https://openai.com/) for LLM capabilities
+- Caiyun Weather API for weather data: https://www.caiyunapp.com/api/
+- Telegram Bot API for messaging platform: https://core.telegram.org/bots/api
+- OpenAI for LLM capabilities: https://openai.com/
